@@ -190,7 +190,7 @@ export async function searchMemories(query: string = '', limit: number = 20): Pr
   let rows;
   if (query.trim() === '') {
     rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number; is_pinned: number; usage_count: number; last_used_at: number | null }[]>(
-      'SELECT * FROM memories ORDER BY is_pinned DESC, usage_count DESC, last_used_at DESC LIMIT ?',
+      'SELECT * FROM memories ORDER BY is_pinned DESC, created_at DESC LIMIT ?',
       [limit]
     );
   } else {

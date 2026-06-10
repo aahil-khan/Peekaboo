@@ -8,12 +8,16 @@ function generateId(): string {
   return crypto.randomUUID();
 }
 
-function timeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  if (days === 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days}d ago`;
+function timeAgo(timestamp: number): string {
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(timestamp).toLocaleDateString();
 }
 
 export const MemoryOverlay: React.FC = () => {
@@ -102,10 +106,10 @@ export const MemoryOverlay: React.FC = () => {
   
   const displayItems = showSaveOption 
     ? [
-        { id: 'save-action', isSaveAction: true, content: searchQuery.trim(), isPinned: false, usageCount: 0, lastUsedAt: null },
-        ...filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt }))
+        { id: 'save-action', isSaveAction: true, content: searchQuery.trim(), isPinned: false, usageCount: 0, lastUsedAt: null, createdAt: Date.now() },
+        ...filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt, createdAt: item.createdAt }))
       ]
-    : filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt }));
+    : filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt, createdAt: item.createdAt }));
 
   // Auto-focus edit input
   useEffect(() => {
@@ -469,6 +473,7 @@ export const MemoryOverlay: React.FC = () => {
                       opacity: 0.7 
                     }}>
                       {item.isPinned && <span style={{ color: '#e2b340' }}>Pinned</span>}
+                      <span>{timeAgo(item.createdAt)}</span>
                       {item.usageCount > 0 && <span>Used {item.usageCount} time{item.usageCount !== 1 ? 's' : ''}</span>}
                       {item.lastUsedAt && <span>Active {timeAgo(item.lastUsedAt)}</span>}
                     </div>

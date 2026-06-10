@@ -77,17 +77,23 @@ export const PeekSurface: React.FC = () => {
     discover();
   }, [provider, activeModel, setActiveModel]);
 
-  // ── Load history on mount ──
+  // ── Load history & memories on mount ──
   useEffect(() => {
-    const loadHistory = async () => {
+    const loadHistoryAndMemories = async () => {
       try {
         const sessions = await getRecentSessions();
         setSessions(sessions);
       } catch {
         // DB not ready yet — will load on next visibility
       }
+      try {
+        const memories = await searchMemories('');
+        usePeekStore.getState().setMemoryOverlay({ items: memories });
+      } catch {
+        // DB not ready yet
+      }
     };
-    loadHistory();
+    loadHistoryAndMemories();
   }, [setSessions]);
 
 

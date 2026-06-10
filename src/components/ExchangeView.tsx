@@ -168,6 +168,30 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
   const isLoading = isLive && !streamingContent;
 
   const isNavigating = useRef(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const autoScrollEnabled = useRef(true);
+
+  // Scroll to bottom on card/page change
+  useEffect(() => {
+    if (cardRef.current) {
+      cardRef.current.scrollTop = cardRef.current.scrollHeight;
+      autoScrollEnabled.current = true;
+    }
+  }, [currentIndex]);
+
+  // Scroll to bottom on stream updates
+  useEffect(() => {
+    if (isLive && autoScrollEnabled.current && cardRef.current) {
+      cardRef.current.scrollTop = cardRef.current.scrollHeight;
+    }
+  }, [streamingContent, isLive]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+    autoScrollEnabled.current = isAtBottom;
+  };
+
   const handleWheel = (e: React.WheelEvent) => {
     if (isNavigating.current) return;
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) > 20) {
@@ -190,6 +214,8 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
       <AnimatePresence mode="popLayout" custom={direction}>
         <motion.div
           key={currentIndex}
+          ref={cardRef}
+          onScroll={handleScroll}
           custom={direction}
           variants={slideVariants}
           initial="enter"
@@ -199,7 +225,7 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
         >
           {/* User question */}
           <div className="peek-exchange-user">
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', maxWidth: '88%' }}>
               <span className="peek-exchange-user-bubble">{shown.user}</span>
               <CopyButton text={shown.user} label="Copy prompt" alignRight />
             </div>
@@ -220,12 +246,20 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
           </div>
 
           {/* Actions — only on completed responses */}
-          {shown.assistant && !isLive && (
-            <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-start', marginTop: '8px' }}>
-              <CopyButton text={shown.assistant} label="Copy response" />
-              <RememberButton text={shown.assistant} />
-            </div>
-          )}
+          {(() => {
+            if (!shown.assistant || isLive) return null;
+            const cleanedText = shown.assistant
+              .replace(/\n\n\*\(Stopped by user\)\*/i, '')
+              .replace(/^\*\(Stopped by user\)\*$/i, '')
+              .trim();
+            if (!cleanedText) return null;
+            return (
+              <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-start', marginTop: '8px' }}>
+                <CopyButton text={cleanedText} label="Copy response" />
+                <RememberButton text={cleanedText} />
+              </div>
+            );
+          })()}
         </motion.div>
       </AnimatePresence>
 

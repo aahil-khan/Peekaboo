@@ -72,7 +72,14 @@ export function useShortcuts(handlers: ShortcutHandlers) {
           useSettingsStore.getState().setModelsOpen(false);
           usePeekStore.getState().setLegendOpen(false);
           
-          usePeekStore.getState().setMemoryOverlay({ isOpen: true, title: 'Recent Memories', items: [] });
+          const selectedText = window.getSelection()?.toString().trim();
+          
+          usePeekStore.getState().setMemoryOverlay({ 
+            isOpen: true, 
+            title: selectedText ? 'Remember Selection' : 'Recent Memories', 
+            initialSearchQuery: selectedText || undefined,
+            items: [] 
+          });
           
           // Dynamically import database module to avoid circular dependency issues
           import('../db/database').then(({ searchMemories }) => {
