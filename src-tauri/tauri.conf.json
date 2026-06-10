@@ -24,17 +24,6 @@
         "visible": false,
         "center": false,
         "focus": false
-      },
-      {
-        "label": "settings",
-        "title": "Peekaboo Settings",
-        "width": 480,
-        "height": 520,
-        "resizable": false,
-        "decorations": true,
-        "transparent": false,
-        "visible": false,
-        "center": true
       }
     ],
     "security": {

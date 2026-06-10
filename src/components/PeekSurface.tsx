@@ -155,6 +155,13 @@ export const PeekSurface: React.FC = () => {
     }
 
     const allMessages = [...messages, userMessage];
+    
+    const { systemPrompt } = useSettingsStore.getState();
+    const streamPayload = [];
+    if (systemPrompt && systemPrompt.trim()) {
+      streamPayload.push({ role: 'system' as const, content: systemPrompt.trim() });
+    }
+    streamPayload.push(...allMessages);
 
     const onComplete = async (full: string) => {
       const assistantMessage = { role: 'assistant' as const, content: full };
@@ -197,7 +204,7 @@ export const PeekSurface: React.FC = () => {
       addMessage(errorMessage);
     };
 
-    await runStream(provider, allMessages, activeModel, onComplete, onError);
+    await runStream(provider, streamPayload, activeModel, onComplete, onError);
   }, [
     input,
     activeModel,

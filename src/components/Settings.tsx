@@ -6,7 +6,8 @@ export const Settings: React.FC = () => {
     hotkey, setHotkey, 
     activeProvider,
     ollamaBaseUrl, setOllamaBaseUrl,
-    historyRetentionDays
+    historyRetentionDays,
+    systemPrompt, setSystemPrompt
   } = useSettingsStore();
 
   React.useEffect(() => {
@@ -16,7 +17,7 @@ export const Settings: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         import('@tauri-apps/api/webviewWindow').then(({ getCurrentWebviewWindow }) => {
-          getCurrentWebviewWindow().hide();
+          getCurrentWebviewWindow().close();
         });
       }
     };
@@ -45,32 +46,6 @@ export const Settings: React.FC = () => {
         justifyContent: 'space-between',
       }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, letterSpacing: '0.02em' }}>Settings</h2>
-        <button
-          onClick={() => {
-            import('@tauri-apps/api/webviewWindow').then(({ getCurrentWebviewWindow }) => {
-              getCurrentWebviewWindow().hide();
-            });
-          }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            color: 'var(--peek-text-muted)',
-            cursor: 'pointer',
-            padding: 4,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: 4,
-          }}
-          onMouseOver={(e) => e.currentTarget.style.color = 'var(--peek-text)'}
-          onMouseOut={(e) => e.currentTarget.style.color = 'var(--peek-text-muted)'}
-          title="Close Settings (Esc)"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
       </div>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
@@ -119,6 +94,34 @@ export const Settings: React.FC = () => {
                 }}
               />
             </div>
+          </div>
+        </section>
+
+        {/* AI Persona Section */}
+        <section style={{ marginBottom: 32 }}>
+          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>AI Persona & Instructions</h3>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>System Prompt</label>
+            <textarea 
+              value={systemPrompt}
+              onChange={(e) => setSystemPrompt(e.target.value)}
+              placeholder="e.g. You are a helpful assistant..."
+              style={{
+                background: 'rgba(0,0,0,0.2)',
+                border: '1px solid var(--peek-border)',
+                color: 'var(--peek-text)',
+                padding: '12px',
+                borderRadius: 6,
+                fontSize: 14,
+                outline: 'none',
+                fontFamily: 'var(--peek-font)',
+                minHeight: '100px',
+                resize: 'vertical'
+              }}
+            />
+            <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, lineHeight: 1.4 }}>
+              This prompt will be injected as hidden context into every new conversation you start.
+            </p>
           </div>
         </section>
 

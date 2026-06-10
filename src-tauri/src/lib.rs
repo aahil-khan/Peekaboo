@@ -60,10 +60,19 @@ mod commands {
 
     #[tauri::command]
     pub fn open_settings(app: AppHandle) {
-        use tauri::Manager;
+        use tauri::{Manager, WebviewUrl};
         if let Some(window) = app.get_webview_window("settings") {
             let _ = window.show();
             let _ = window.set_focus();
+        } else {
+            let _ = tauri::WebviewWindowBuilder::new(
+                &app,
+                "settings",
+                WebviewUrl::App("index.html".into())
+            )
+            .title("Peekaboo Settings")
+            .inner_size(480.0, 520.0)
+            .build();
         }
     }
 
