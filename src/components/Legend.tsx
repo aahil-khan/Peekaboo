@@ -12,6 +12,8 @@ const HOTKEYS = [
   { key: 'Alt+M', description: 'Toggle Model Switcher' },
   { key: 'Alt+,', description: 'Open Settings Window' },
   { key: 'Alt+/', description: 'Toggle this Shortcuts Legend' },
+  { key: 'Alt+←', description: 'Previous Exchange in Session' },
+  { key: 'Alt+→', description: 'Next Exchange in Session' },
   { key: 'Escape', description: 'Hide Window / Dismiss Menu' },
   { key: 'Up Arrow', description: 'Load Previous Query (when input empty)' },
 ];

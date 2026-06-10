@@ -39,13 +39,6 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAbort }
   }, [input, adjustHeight]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Alt+M to toggle models overlay
-    if (e.key.toLowerCase() === 'm' && e.altKey) {
-      e.preventDefault();
-      setModelsOpen(!isModelsOpen);
-      return;
-    }
-
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       if (input.trim() && !isStreaming) {

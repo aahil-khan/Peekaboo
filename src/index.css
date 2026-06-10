@@ -262,28 +262,362 @@ html, body, #root {
   animation: peek-pulse 2s ease-in-out infinite;
 }
 
-/* ─── Response ──────────────────────────────────────────────────────── */
+/* ─── Exchange View (Paged) ─────────────────────────────────────────── */
 
-.peek-response {
+.peek-exchange-view {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.peek-exchange-card {
+  padding: 12px 16px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   max-height: 380px;
   overflow-y: auto;
-  padding: 8px 16px 16px;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
-.peek-response::-webkit-scrollbar {
-  width: 4px;
-}
-
-.peek-response::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.peek-response::-webkit-scrollbar-thumb {
+.peek-exchange-card::-webkit-scrollbar { width: 4px; }
+.peek-exchange-card::-webkit-scrollbar-track { background: transparent; }
+.peek-exchange-card::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
+
+/* User question bubble */
+.peek-exchange-user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.peek-exchange-user-bubble {
+  background: rgba(129, 140, 248, 0.1);
+  border: 1px solid rgba(129, 140, 248, 0.18);
+  color: var(--peek-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 6px 12px;
+  border-radius: 14px 14px 4px 14px;
+  max-width: 88%;
+  word-break: break-word;
+  user-select: text;
+  font-style: italic;
+}
+
+/* Assistant response */
+.peek-exchange-assistant {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--peek-text);
+  user-select: text;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Markdown in exchange */
+.peek-exchange-assistant p { margin-bottom: 0.75em; }
+.peek-exchange-assistant p:last-child { margin-bottom: 0; }
+.peek-exchange-assistant h1, .peek-exchange-assistant h2, .peek-exchange-assistant h3 {
+  font-weight: 600; margin: 1em 0 0.5em;
+}
+.peek-exchange-assistant h1 { font-size: 1.25em; }
+.peek-exchange-assistant h2 { font-size: 1.1em; }
+.peek-exchange-assistant h3 { font-size: 1em; }
+.peek-exchange-assistant strong { font-weight: 600; }
+.peek-exchange-assistant em { font-style: italic; color: var(--peek-text-secondary); }
+.peek-exchange-assistant ul, .peek-exchange-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
+.peek-exchange-assistant li { margin-bottom: 0.3em; }
+.peek-exchange-assistant blockquote {
+  border-left: 2px solid var(--peek-accent-dim);
+  padding-left: 12px;
+  color: var(--peek-text-secondary);
+  margin: 0.75em 0;
+}
+.peek-exchange-assistant table { width: 100%; border-collapse: collapse; margin: 0.75em 0; font-size: 13px; }
+.peek-exchange-assistant th, .peek-exchange-assistant td { padding: 6px 10px; border: 1px solid var(--peek-border); }
+.peek-exchange-assistant th { background: rgba(255,255,255,0.04); font-weight: 600; }
+
+/* Exchange navigation bar */
+.peek-exchange-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px 8px;
+  border-top: 1px solid var(--peek-border);
+}
+
+.peek-nav-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--peek-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--peek-text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  flex-shrink: 0;
+}
+
+.peek-nav-btn:hover:not(:disabled) {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.peek-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.peek-exchange-counter {
+  font-size: 11px;
+  color: var(--peek-text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+  letter-spacing: 0.03em;
+}
+
+/* Status bar breadcrumb */
+.peek-exchange-breadcrumb {
+  font-size: 11px;
+  color: var(--peek-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--peek-border);
+  border-radius: 4px;
+  padding: 1px 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Copy response button */
+.peek-copy-response-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--peek-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-size: 11px;
+  font-family: var(--peek-font);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  user-select: none;
+  align-self: flex-start;
+  width: max-content;
+}
+
+.peek-copy-response-btn:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Code block with header */
+.peek-code-block-wrapper {
+  margin: 0.75em 0;
+  border-radius: var(--peek-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--peek-border);
+}
+
+.peek-code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--peek-border);
+}
+
+.peek-code-lang {
+  font-family: var(--peek-font-mono);
+  font-size: 11px;
+  color: var(--peek-text-muted);
+  text-transform: lowercase;
+}
+
+.peek-code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--peek-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-size: 11px;
+  font-family: var(--peek-font);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+}
+
+.peek-code-copy-btn:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+}
+
+.peek-code-block-wrapper .peek-code-block {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+}
+
+
+
+/* Exchange = one user+assistant pair */
+.peek-thread-exchange {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--peek-border);
+}
+
+.peek-thread-exchange:first-child {
+  border-top: 1px solid var(--peek-border);
+}
+
+/* User message bubble */
+.peek-thread-user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.peek-thread-user-bubble {
+  background: rgba(129, 140, 248, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.2);
+  color: var(--peek-text);
+  font-size: 13.5px;
+  line-height: 1.55;
+  padding: 7px 12px;
+  border-radius: 14px 14px 4px 14px;
+  max-width: 85%;
+  word-break: break-word;
+  user-select: text;
+}
+
+/* Assistant message */
+.peek-thread-assistant {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--peek-text);
+  user-select: text;
+  padding-left: 2px;
+  position: relative;
+}
+
+/* Markdown in thread */
+.peek-thread-assistant p { margin-bottom: 0.75em; }
+.peek-thread-assistant p:last-child { margin-bottom: 0; }
+.peek-thread-assistant h1, .peek-thread-assistant h2, .peek-thread-assistant h3 {
+  font-weight: 600; margin: 1em 0 0.5em; color: var(--peek-text);
+}
+.peek-thread-assistant h1 { font-size: 1.25em; }
+.peek-thread-assistant h2 { font-size: 1.1em; }
+.peek-thread-assistant h3 { font-size: 1em; }
+.peek-thread-assistant strong { font-weight: 600; color: var(--peek-text); }
+.peek-thread-assistant em { font-style: italic; color: var(--peek-text-secondary); }
+.peek-thread-assistant ul, .peek-thread-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
+.peek-thread-assistant li { margin-bottom: 0.3em; }
+.peek-thread-assistant blockquote {
+  border-left: 2px solid var(--peek-accent-dim);
+  padding-left: 12px;
+  color: var(--peek-text-secondary);
+  margin: 0.75em 0;
+}
+
+/* Copy response button */
+.peek-copy-response-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--peek-border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-size: 11px;
+  font-family: var(--peek-font);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  user-select: none;
+  align-self: flex-start;
+  width: max-content;
+}
+
+.peek-copy-response-btn:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Code block with header */
+.peek-code-block-wrapper {
+  margin: 0.75em 0;
+  border-radius: var(--peek-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--peek-border);
+}
+
+.peek-code-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border-bottom: 1px solid var(--peek-border);
+}
+
+.peek-code-lang {
+  font-family: var(--peek-font-mono);
+  font-size: 11px;
+  color: var(--peek-text-muted);
+  text-transform: lowercase;
+}
+
+.peek-code-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--peek-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-size: 11px;
+  font-family: var(--peek-font);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+}
+
+.peek-code-copy-btn:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+}
+
+/* Override the standalone code block (used inside wrapper) */
+.peek-code-block-wrapper .peek-code-block {
+  border: none;
+  border-radius: 0;
+  margin: 0;
+}
+
+
+
 
 .peek-response-content {
   font-size: 13.5px;
@@ -445,12 +779,15 @@ html, body, #root {
 /* ─── History Panel ─────────────────────────────────────────────────── */
 
 .peek-history {
-  grid-area: 1 / 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   background: var(--peek-bg);
   min-height: 200px;
-  max-height: 250px;
   z-index: 10;
   border-radius: var(--peek-radius);
   overflow: hidden;

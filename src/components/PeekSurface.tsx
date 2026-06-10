@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 import { Input } from './Input';
-import { Response } from './Response';
+import { ExchangeView } from './ExchangeView';
 import { History } from './History';
 import { Models } from './Models';
 import { Legend } from './Legend';
@@ -54,6 +54,7 @@ export const PeekSurface: React.FC = () => {
   const { attachments, add: addAttachment, remove: removeAttachment, clear: clearAttachments } = useAttachments();
   const { run: runStream, abort: abortStream } = useStream();
   const [showCleared, setShowCleared] = useState(false);
+  const [exchangePos, setExchangePos] = useState<{ current: number; total: number } | null>(null);
 
   const provider = useMemo(
     () => new OllamaProvider(ollamaBaseUrl),
@@ -125,6 +126,15 @@ export const PeekSurface: React.FC = () => {
     }
 
     return () => resizeObserver.disconnect();
+  }, [visible]);
+
+  // ── Reset menus on blur/hide ──
+  useEffect(() => {
+    if (!visible) {
+      useHistoryStore.getState().setOpen(false);
+      useSettingsStore.getState().setModelsOpen(false);
+      usePeekStore.getState().setLegendOpen(false);
+    }
   }, [visible]);
 
   // ── Submit query ──
@@ -249,21 +259,12 @@ export const PeekSurface: React.FC = () => {
     abortStream();
     clear();
     clearAttachments();
+    setExchangePos(null);
     setShowCleared(true);
     setTimeout(() => setShowCleared(false), 2000);
   }, [abortStream, clear, clearAttachments]);
 
-  // ── Previous query ──
-  const handlePreviousQuery = useCallback(async () => {
-    try {
-      const lastQuery = await getLastUserMessage();
-      if (lastQuery) {
-        setInput(lastQuery);
-      }
-    } catch {
-      // DB not ready
-    }
-  }, [setInput]);
+
 
   // ── Load session from history ──
   const handleSelectSession = useCallback(
@@ -290,7 +291,7 @@ export const PeekSurface: React.FC = () => {
     onSubmit: handleSubmit,
     onClear: handleClear,
     onEscape: handleEscape,
-    onPreviousQuery: handlePreviousQuery,
+    onStop: abortStream,
   });
 
   // ── Ollama status check ──
@@ -308,11 +309,16 @@ export const PeekSurface: React.FC = () => {
     return () => clearInterval(interval);
   }, [provider]);
 
-  const hasResponse = isStreaming || !!streamingContent || messages.some((m) => m.role === 'assistant');
-  const displayContent =
-    streamingContent ||
-    (messages.filter((m) => m.role === 'assistant').pop()?.content as string) ||
-    '';
+  const hasConversation = isStreaming || messages.some((m) => m.role !== 'system');
+
+  const handleExchangeChange = useCallback((current: number, total: number) => {
+    setExchangePos({ current, total });
+  }, []);
+
+  const { isModelsOpen } = useSettingsStore();
+  const { isLegendOpen } = usePeekStore();
+  const { isOpen: isHistoryOpen } = useHistoryStore();
+  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen;
 
   return (
     <AnimatePresence>
@@ -328,7 +334,14 @@ export const PeekSurface: React.FC = () => {
           aria-modal="true"
           aria-label="Peekaboo AI Assistant"
         >
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: '1fr' }}>
+          <div style={{ 
+            position: 'relative', 
+            display: 'grid', 
+            gridTemplateColumns: '1fr', 
+            gridTemplateRows: '1fr',
+            minHeight: isMenuOpen ? 280 : undefined,
+            transition: 'min-height 0.15s ease-out'
+          }}>
             {/* Main content */}
             <div className="peek-main" style={{ gridArea: '1 / 1' }}>
               {/* Input */}
@@ -380,20 +393,19 @@ export const PeekSurface: React.FC = () => {
                       </motion.span>
                     )}
                   </AnimatePresence>
-                  {backgroundTasks.filter((t) => t.status === 'running').length >
-                    0 && (
-                    <span className="peek-bg-indicator">
-                      <span className="peek-bg-dot" />
-                      Background task running
-                    </span>
-                  )}
                 </div>
               </div>
 
-              {/* Response */}
-              <AnimatePresence mode="popLayout">
-                {hasResponse && (
-                  <Response key="peek-response-block" content={displayContent} isStreaming={isStreaming} />
+              {/* Paged exchange view */}
+              <AnimatePresence>
+                {hasConversation && (
+                  <ExchangeView
+                    key="peek-exchange-view"
+                    messages={messages}
+                    streamingContent={streamingContent}
+                    isStreaming={isStreaming}
+                    onExchangeChange={handleExchangeChange}
+                  />
                 )}
               </AnimatePresence>
             </div>

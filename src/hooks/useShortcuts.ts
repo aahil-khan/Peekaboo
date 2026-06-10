@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { usePeekStore } from '../store/peek';
 import { useHistoryStore } from '../store/history';
+import { useSettingsStore } from '../store/settings';
 
 type KeyHandler = (e: KeyboardEvent) => void;
 
@@ -8,7 +9,7 @@ interface ShortcutHandlers {
   onSubmit: () => void;
   onClear: () => void;
   onEscape: () => void;
-  onPreviousQuery: () => void;
+  onStop: () => void;
 }
 
 export function useShortcuts(handlers: ShortcutHandlers) {
@@ -41,10 +42,34 @@ export function useShortcuts(handlers: ShortcutHandlers) {
         return;
       }
 
+      // Alt+Q → Stop streaming
+      if (isMod && e.key.toLowerCase() === 'q') {
+        e.preventDefault();
+        handlers.onStop();
+        return;
+      }
+
       // Alt+H → Toggle history
       if (isMod && e.key.toLowerCase() === 'h') {
         e.preventDefault();
-        useHistoryStore.getState().toggleOpen();
+        const opening = !useHistoryStore.getState().isOpen;
+        useHistoryStore.getState().setOpen(opening);
+        if (opening) {
+          useSettingsStore.getState().setModelsOpen(false);
+          usePeekStore.getState().setLegendOpen(false);
+        }
+        return;
+      }
+
+      // Alt+M → Toggle models
+      if (isMod && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        const opening = !useSettingsStore.getState().isModelsOpen;
+        useSettingsStore.getState().setModelsOpen(opening);
+        if (opening) {
+          useHistoryStore.getState().setOpen(false);
+          usePeekStore.getState().setLegendOpen(false);
+        }
         return;
       }
 
@@ -60,17 +85,11 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       // Alt+/ → Toggle legend
       if (isMod && e.key === '/') {
         e.preventDefault();
-        const store = usePeekStore.getState();
-        store.setLegendOpen(!store.isLegendOpen);
-        return;
-      }
-
-      // Up arrow (empty input) → Previous query
-      if (e.key === 'ArrowUp') {
-        const input = usePeekStore.getState().input;
-        if (!input.trim()) {
-          e.preventDefault();
-          handlers.onPreviousQuery();
+        const opening = !usePeekStore.getState().isLegendOpen;
+        usePeekStore.getState().setLegendOpen(opening);
+        if (opening) {
+          useHistoryStore.getState().setOpen(false);
+          useSettingsStore.getState().setModelsOpen(false);
         }
         return;
       }
