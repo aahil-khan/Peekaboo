@@ -22,21 +22,34 @@ function getTypeIcon(type: AttachmentType): string {
 export const Attachments: React.FC<AttachmentsProps> = ({ attachments, onRemove, onClickAttachment }) => {
   if (attachments.length === 0) return null;
 
+  const isExpandable = (att: Attachment) => {
+    if (att.type === 'selection' && att.content.length <= 20) {
+      return false;
+    }
+    return true;
+  };
+
   return (
     <div className="peek-attachments">
       <AnimatePresence mode="popLayout">
-        {attachments.map((att) => (
-          <motion.div
-            key={att.id}
-            className="peek-chip"
-            onClick={() => onClickAttachment?.(att)}
-            style={{ cursor: onClickAttachment ? 'pointer' : 'default' }}
-            variants={chipVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            layout
-          >
+        {attachments.map((att) => {
+          const expandable = isExpandable(att);
+          return (
+            <motion.div
+              key={att.id}
+              className="peek-chip"
+              onClick={() => {
+                if (expandable) {
+                  onClickAttachment?.(att);
+                }
+              }}
+              style={{ cursor: onClickAttachment && expandable ? 'pointer' : 'default' }}
+              variants={chipVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              layout
+            >
             <span className="peek-chip-icon" aria-hidden="true">
               {getTypeIcon(att.type)}
             </span>
@@ -52,8 +65,9 @@ export const Attachments: React.FC<AttachmentsProps> = ({ attachments, onRemove,
             >
               ×
             </button>
-          </motion.div>
-        ))}
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );

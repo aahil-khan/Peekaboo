@@ -82,6 +82,7 @@ mod commands {
                 }
             }
         }
+
         // Clear selection if we got one to avoid stale captures
         if selection.is_some() {
             let _ = Command::new("wl-copy").args(["-p", "-c"]).status();

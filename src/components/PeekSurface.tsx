@@ -55,6 +55,7 @@ export const PeekSurface: React.FC = () => {
   const { run: runStream, abort: abortStream } = useStream();
   const [showCleared, setShowCleared] = useState(false);
   const [viewingAttachment, setViewingAttachment] = useState<any | null>(null);
+  const [hasActiveModalHeight, setHasActiveModalHeight] = useState(false);
   const viewingAttachmentRef = useRef<any | null>(null);
   const attachmentsRef = useRef<any[]>([]);
 
@@ -177,6 +178,7 @@ export const PeekSurface: React.FC = () => {
       usePeekStore.getState().setLegendOpen(false);
       usePeekStore.getState().setMemoryOverlay({ isOpen: false });
       setViewingAttachment(null);
+      setHasActiveModalHeight(false);
     }
   }, [visible]);
 
@@ -374,8 +376,8 @@ export const PeekSurface: React.FC = () => {
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
   const { isOpen: isHistoryOpen } = useHistoryStore();
-  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen || !!viewingAttachment;
-  const gridMinHeight = viewingAttachment ? 350 : (isMenuOpen ? 280 : undefined);
+  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen || hasActiveModalHeight;
+  const gridMinHeight = hasActiveModalHeight ? 350 : (isMenuOpen ? 280 : undefined);
 
   return (
     <AnimatePresence>
@@ -391,16 +393,14 @@ export const PeekSurface: React.FC = () => {
           aria-modal="true"
           aria-label="Peekaboo AI Assistant"
         >
-          <motion.div 
-            animate={{ minHeight: gridMinHeight }}
-            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-            style={{ 
-              position: 'relative', 
-              display: 'grid', 
-              gridTemplateColumns: '1fr', 
-              gridTemplateRows: '1fr',
-            }}
-          >
+          <div style={{ 
+            position: 'relative', 
+            display: 'grid', 
+            gridTemplateColumns: '1fr', 
+            gridTemplateRows: '1fr',
+            minHeight: gridMinHeight,
+            transition: 'min-height 0.15s ease-out'
+          }}>
             {/* Main content */}
             <div className="peek-main" style={{ gridArea: '1 / 1' }}>
               {/* Input */}
@@ -423,7 +423,10 @@ export const PeekSurface: React.FC = () => {
               <Attachments 
                 attachments={attachments} 
                 onRemove={removeAttachment} 
-                onClickAttachment={(att) => setViewingAttachment(att)}
+                onClickAttachment={(att) => {
+                  setViewingAttachment(att);
+                  setHasActiveModalHeight(true);
+                }}
               />
 
               {/* Status bar */}
@@ -486,7 +489,11 @@ export const PeekSurface: React.FC = () => {
             <MemoryOverlay />
 
             {/* Attachment Viewer Modal */}
-            <AnimatePresence>
+            <AnimatePresence onExitComplete={() => {
+              if (!viewingAttachmentRef.current) {
+                setHasActiveModalHeight(false);
+              }
+            }}>
               {viewingAttachment && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -590,7 +597,7 @@ export const PeekSurface: React.FC = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-          </motion.div>
+          </div>
         </motion.div>
       )}
     </AnimatePresence>
