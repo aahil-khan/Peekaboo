@@ -1,19 +1,27 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePeekStore } from '../store/peek';
 import { historyVariants } from '../lib/motion';
-import { saveMemory, deleteMemory, updateMemory } from '../db/database';
+import { saveMemory, deleteMemory, updateMemory, togglePinMemory, incrementMemoryUsage } from '../db/database';
 
 function generateId(): string {
   return crypto.randomUUID();
 }
 
+function timeAgo(ts: number): string {
+  const diff = Date.now() - ts;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days}d ago`;
+}
+
 export const MemoryOverlay: React.FC = () => {
-  const { memoryOverlay, setMemoryOverlay } = usePeekStore();
-  const { isOpen, title, items } = memoryOverlay;
+  const { memoryOverlay, setMemoryOverlay, input, setInput } = usePeekStore();
+  const { isOpen, title, items, initialSearchQuery } = memoryOverlay;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const editInputRef = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLTextAreaElement>(null);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,26 +37,75 @@ export const MemoryOverlay: React.FC = () => {
   // Reset state when opening/closing
   useEffect(() => {
     if (isOpen) {
-      setSearchQuery('');
-      setIsSearchVisible(false);
+      if (initialSearchQuery) {
+        setSearchQuery(initialSearchQuery);
+        setIsSearchVisible(true);
+      } else {
+        setSearchQuery('');
+        setIsSearchVisible(false);
+      }
       setSelectedIndex(0);
       setEditingId(null);
       setCopiedText(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialSearchQuery]);
+
+  const adjustHeight = useCallback((el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    const maxHeight = 120;
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, []);
+
+  useEffect(() => {
+    adjustHeight(searchInputRef.current);
+  }, [searchQuery, adjustHeight, isSearchVisible]);
+
+  useEffect(() => {
+    adjustHeight(editInputRef.current);
+  }, [editContent, adjustHeight, editingId]);
 
   const exactMatch = items.find(i => i.content.toLowerCase() === searchQuery.trim().toLowerCase());
   const showSaveOption = searchQuery.trim() && !exactMatch;
   
-  const filteredItems = items.filter(i => i.content.toLowerCase().includes(searchQuery.toLowerCase()));
+  let filteredItems = items.filter(i => i.content.toLowerCase().includes(searchQuery.toLowerCase()));
   
-  // Prepend a "Save" action if the user typed a new string
+  // Sort by search relevance client-side
+  if (searchQuery.trim()) {
+    const q = searchQuery.toLowerCase().trim();
+    filteredItems = [...filteredItems].sort((a, b) => {
+      const aContent = a.content.toLowerCase();
+      const bContent = b.content.toLowerCase();
+      
+      const aExact = aContent === q;
+      const bExact = bContent === q;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+      
+      const aStarts = aContent.startsWith(q);
+      const bStarts = bContent.startsWith(q);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      
+      // Fallback to pinning, usage count, and recency
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      
+      if (b.usageCount !== a.usageCount) {
+        return b.usageCount - a.usageCount;
+      }
+      
+      return (b.lastUsedAt || 0) - (a.lastUsedAt || 0);
+    });
+  }
+  
   const displayItems = showSaveOption 
     ? [
-        { id: 'save-action', isSaveAction: true, content: searchQuery.trim() },
-        ...filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content }))
+        { id: 'save-action', isSaveAction: true, content: searchQuery.trim(), isPinned: false, usageCount: 0, lastUsedAt: null },
+        ...filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt }))
       ]
-    : filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content }));
+    : filteredItems.map(item => ({ id: item.id, isSaveAction: false, content: item.content, isPinned: item.isPinned, usageCount: item.usageCount, lastUsedAt: item.lastUsedAt }));
 
   // Auto-focus edit input
   useEffect(() => {
@@ -58,13 +115,46 @@ export const MemoryOverlay: React.FC = () => {
     }
   }, [editingId]);
 
+  const reloadMemories = async () => {
+    const { searchMemories: reload } = await import('../db/database');
+    const memories = await reload('');
+    setMemoryOverlay({ items: memories });
+    return memories;
+  };
+
+  const handleExecuteAction = async (item: typeof displayItems[0], shiftKey: boolean) => {
+    if (item.isSaveAction) {
+      // Save it
+      await saveMemory(generateId(), item.content);
+      await reloadMemories();
+      setSearchQuery('');
+      setIsSearchVisible(false);
+      setMemoryOverlay({ initialSearchQuery: undefined });
+    } else {
+      // Use it
+      await incrementMemoryUsage(item.id);
+      await reloadMemories();
+      if (shiftKey) {
+        // Insert into prompt
+        const newInput = input + (input && !input.endsWith('\n') ? '\n' : '') + item.content;
+        setInput(newInput);
+        setMemoryOverlay({ isOpen: false });
+      } else {
+        // Copy
+        navigator.clipboard.writeText(item.content);
+        setCopiedText(item.content);
+        setTimeout(() => setCopiedText(null), 2000);
+      }
+    }
+  };
+
   useEffect(() => {
     if (!isOpen || editingId) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       
-      // Auto-show search on typing
-      if (!isSearchVisible && e.key.length === 1) {
+      // Auto-show search on typing (ignore Shift, Enter, etc)
+      if (!isSearchVisible && e.key.length === 1 && !e.shiftKey) {
         setIsSearchVisible(true);
         setSearchQuery((prev) => prev + e.key);
         e.preventDefault();
@@ -77,10 +167,11 @@ export const MemoryOverlay: React.FC = () => {
           e.stopPropagation();
           setSearchQuery('');
           setIsSearchVisible(false);
+          setMemoryOverlay({ initialSearchQuery: undefined });
         } else {
           e.preventDefault();
           e.stopPropagation();
-          setMemoryOverlay({ isOpen: false });
+          setMemoryOverlay({ isOpen: false, initialSearchQuery: undefined });
         }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
@@ -92,36 +183,20 @@ export const MemoryOverlay: React.FC = () => {
         e.preventDefault();
         e.stopPropagation();
         if (displayItems.length > 0) {
-          const selected = displayItems[selectedIndex];
-          if (selected.isSaveAction) {
-            // Save it
-            saveMemory(generateId(), selected.content).then(() => {
-              // Reload memories
-              import('../db/database').then(({ searchMemories }) => {
-                searchMemories('').then(memories => {
-                  setMemoryOverlay({ items: memories.map(m => ({ id: m.id, content: m.content })) });
-                });
-              });
-              setSearchQuery('');
-              setIsSearchVisible(false);
-            });
-          } else {
-            // Copy it
-            navigator.clipboard.writeText(selected.content);
-            setCopiedText(selected.content);
-            setTimeout(() => setCopiedText(null), 2000);
-          }
+          handleExecuteAction(displayItems[selectedIndex], e.shiftKey);
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isOpen, setMemoryOverlay, isSearchVisible, searchQuery, displayItems, selectedIndex, items, editingId]);
+  }, [isOpen, setMemoryOverlay, isSearchVisible, searchQuery, displayItems, selectedIndex, items, editingId, input, setInput]);
 
   // Focus search input when it becomes visible
   useEffect(() => {
     if (isSearchVisible && searchInputRef.current) {
       searchInputRef.current.focus();
+      // Move cursor to end
+      searchInputRef.current.setSelectionRange(searchInputRef.current.value.length, searchInputRef.current.value.length);
     }
   }, [isSearchVisible]);
 
@@ -142,14 +217,11 @@ export const MemoryOverlay: React.FC = () => {
     }
   }, [selectedIndex]);
 
-  const handleEditSubmit = async (e: React.FormEvent, id: string) => {
+  const handleEditSubmit = async (e: React.FormEvent | React.KeyboardEvent, id: string) => {
     e.preventDefault();
     if (editContent.trim()) {
       await updateMemory(id, editContent.trim());
-      // Reload memories
-      const { searchMemories: reload } = await import('../db/database');
-      const memories = await reload('');
-      setMemoryOverlay({ items: memories.map(m => ({ id: m.id, content: m.content })) });
+      await reloadMemories();
     }
     setEditingId(null);
     if (searchInputRef.current) searchInputRef.current.focus();
@@ -158,11 +230,14 @@ export const MemoryOverlay: React.FC = () => {
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     await deleteMemory(id);
-    // Reload memories
-    const { searchMemories: reload } = await import('../db/database');
-    const memories = await reload('');
-    setMemoryOverlay({ items: memories.map(m => ({ id: m.id, content: m.content })) });
+    const memories = await reloadMemories();
     setSelectedIndex((i) => Math.max(0, Math.min(i, memories.length - 1)));
+  };
+
+  const handleTogglePin = async (e: React.MouseEvent, item: typeof displayItems[0]) => {
+    e.stopPropagation();
+    await togglePinMemory(item.id, !item.isPinned);
+    await reloadMemories();
   };
 
   return (
@@ -181,7 +256,7 @@ export const MemoryOverlay: React.FC = () => {
               <span className="peek-history-title">{title}</span>
             </div>
             <button
-              onClick={() => setMemoryOverlay({ isOpen: false })}
+              onClick={() => setMemoryOverlay({ isOpen: false, initialSearchQuery: undefined })}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -213,20 +288,35 @@ export const MemoryOverlay: React.FC = () => {
                 transition={{ duration: 0.15 }}
                 style={{ overflow: 'hidden' }}
               >
-                <input 
+                <textarea 
                   ref={searchInputRef}
-                  type="text" 
                   placeholder="Search or save memory..." 
                   value={searchQuery}
+                  rows={1}
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setSelectedIndex(0);
                   }}
                   onKeyDown={(e) => {
                     if (e.altKey || e.ctrlKey || e.metaKey) return;
-                    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter' && e.key !== 'Escape') {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      // Handled by global listener to avoid duplicates
+                    } else if (e.key === 'Enter' && e.shiftKey) {
+                      // Handled by global listener
+                    } else if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp' && e.key !== 'Enter' && e.key !== 'Escape') {
                       e.stopPropagation();
                     }
+                  }}
+                  style={{
+                    width: '100%',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--peek-text)',
+                    fontSize: '13px',
+                    outline: 'none',
+                    resize: 'none',
+                    fontFamily: 'inherit',
+                    lineHeight: '1.4'
                   }}
                 />
               </motion.div>
@@ -246,11 +336,10 @@ export const MemoryOverlay: React.FC = () => {
                   style={{
                     background: idx === selectedIndex && editingId !== item.id ? 'var(--peek-hover)' : 'transparent',
                     display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: '8px',
+                    flexDirection: 'column',
                     width: '100%',
                     padding: '8px 12px',
+                    gap: 4
                   }}
                   onMouseEnter={() => setSelectedIndex(idx)}
                 >
@@ -259,10 +348,10 @@ export const MemoryOverlay: React.FC = () => {
                       onSubmit={(e) => handleEditSubmit(e, item.id)}
                       style={{ width: '100%', display: 'flex' }}
                     >
-                      <input
+                      <textarea
                         ref={editInputRef}
-                        className="peek-history-edit-input"
                         value={editContent}
+                        rows={1}
                         onChange={(e) => setEditContent(e.target.value)}
                         onBlur={(e) => handleEditSubmit(e, item.id)}
                         onKeyDown={(e) => {
@@ -271,6 +360,9 @@ export const MemoryOverlay: React.FC = () => {
                             e.preventDefault();
                             setEditingId(null);
                             if (searchInputRef.current) searchInputRef.current.focus();
+                          } else if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleEditSubmit(e, item.id);
                           }
                         }}
                         style={{
@@ -278,15 +370,18 @@ export const MemoryOverlay: React.FC = () => {
                           background: 'var(--peek-bg)',
                           border: '1px solid var(--peek-border)',
                           color: 'var(--peek-text)',
-                          padding: '4px 8px',
+                          padding: '6px 8px',
                           borderRadius: '4px',
                           fontSize: '13px',
                           outline: 'none',
+                          resize: 'none',
+                          fontFamily: 'inherit',
+                          lineHeight: '1.4'
                         }}
                       />
                     </form>
                   ) : (
-                    <>
+                    <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '8px', width: '100%' }}>
                       <button
                         style={{
                           background: 'transparent',
@@ -296,49 +391,45 @@ export const MemoryOverlay: React.FC = () => {
                           margin: 0,
                           textAlign: 'left',
                           display: 'flex',
-                          alignItems: 'center',
+                          alignItems: 'flex-start',
                           gap: '8px',
                           flex: 1,
                           color: 'inherit',
                           fontFamily: 'inherit',
                         }}
-                        onClick={() => {
-                          if (item.isSaveAction) {
-                            saveMemory(generateId(), item.content).then(() => {
-                              import('../db/database').then(({ searchMemories }) => {
-                                searchMemories('').then(memories => {
-                                  setMemoryOverlay({ items: memories.map(m => ({ id: m.id, content: m.content })) });
-                                });
-                              });
-                              setSearchQuery('');
-                              setIsSearchVisible(false);
-                            });
-                          } else {
-                            navigator.clipboard.writeText(item.content);
-                            setCopiedText(item.content);
-                            setTimeout(() => setCopiedText(null), 2000);
-                          }
-                        }}
+                        onClick={(e) => handleExecuteAction(item, e.shiftKey)}
                       >
-                        {item.isSaveAction ? (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                            <polyline points="7 3 7 8 15 8"></polyline>
-                          </svg>
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--peek-text-muted)', flexShrink: 0 }}>
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                          </svg>
-                        )}
-                        <span className="peek-history-item-title" style={{ whiteSpace: 'normal', overflow: 'visible', textOverflow: 'clip' }}>
-                          {item.isSaveAction ? <><span style={{ color: 'var(--peek-text-muted)' }}>Save memory:</span> {item.content}</> : item.content}
+                        <div style={{ marginTop: 2 }}>
+                          {item.isSaveAction ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                              <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--peek-text-muted)', flexShrink: 0 }}>
+                              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                          )}
+                        </div>
+                        <span className="peek-history-item-title" style={{ whiteSpace: 'pre-wrap', overflow: 'visible', textOverflow: 'clip', lineHeight: '1.4' }}>
+                          {item.isSaveAction ? <><span style={{ color: 'var(--peek-text-muted)' }}>Save memory: </span>{item.content}</> : item.content}
                         </span>
                       </button>
 
                       {!item.isSaveAction && (
-                        <div className="peek-history-item-actions">
+                        <div className="peek-history-item-actions" style={{ marginTop: 2 }}>
+                          <div 
+                            className="peek-history-action-btn"
+                            title={item.isPinned ? "Unpin" : "Pin memory"}
+                            onClick={(e) => handleTogglePin(e, item)}
+                            style={{ color: item.isPinned ? '#e2b340' : 'inherit' }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill={item.isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
+                            </svg>
+                          </div>
                           <div 
                             className="peek-history-action-btn"
                             title="Edit memory"
@@ -365,13 +456,27 @@ export const MemoryOverlay: React.FC = () => {
                           </div>
                         </div>
                       )}
-                    </>
+                    </div>
+                  )}
+
+                  {!item.isSaveAction && !editingId && (
+                    <div style={{ 
+                      display: 'flex', 
+                      gap: 12, 
+                      paddingLeft: 22, 
+                      fontSize: '10.5px', 
+                      color: 'var(--peek-text-muted)',
+                      opacity: 0.7 
+                    }}>
+                      {item.isPinned && <span style={{ color: '#e2b340' }}>Pinned</span>}
+                      {item.usageCount > 0 && <span>Used {item.usageCount} time{item.usageCount !== 1 ? 's' : ''}</span>}
+                      {item.lastUsedAt && <span>Active {timeAgo(item.lastUsedAt)}</span>}
+                    </div>
                   )}
                 </div>
               ))
             )}
             
-            {/* Copied indicator pill */}
             <AnimatePresence>
               {copiedText && (
                 <motion.div

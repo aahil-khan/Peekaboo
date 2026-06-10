@@ -168,6 +168,12 @@ pub fn run() {
                             description: "Create memories table",
                             sql: include_str!("../../src/db/migrations/002_memories.sql"),
                             kind: tauri_plugin_sql::MigrationKind::Up,
+                        },
+                        tauri_plugin_sql::Migration {
+                            version: 3,
+                            description: "Enhance memories table",
+                            sql: include_str!("../../src/db/migrations/003_memory_enhancements.sql"),
+                            kind: tauri_plugin_sql::MigrationKind::Up,
                         }
                     ],
                 )

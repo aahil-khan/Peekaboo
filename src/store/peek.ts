@@ -46,8 +46,8 @@ interface PeekState {
   clear: () => void;
 
   // Memory Overlay
-  memoryOverlay: { isOpen: boolean; title: string; items: { id: string; content: string }[] };
-  setMemoryOverlay: (update: Partial<{ isOpen: boolean; title: string; items: { id: string; content: string }[] }>) => void;
+  memoryOverlay: { isOpen: boolean; title: string; initialSearchQuery?: string; items: import('../db/database').Memory[] };
+  setMemoryOverlay: (update: Partial<{ isOpen: boolean; title: string; initialSearchQuery?: string; items: import('../db/database').Memory[] }>) => void;
 }
 
 export const usePeekStore = create<PeekState>((set) => ({

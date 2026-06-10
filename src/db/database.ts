@@ -139,6 +139,9 @@ export async function cleanOldSessions(retentionDays: number): Promise<void> {
 export interface Memory {
   id: string;
   content: string;
+  isPinned: boolean;
+  usageCount: number;
+  lastUsedAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -147,7 +150,7 @@ export async function saveMemory(id: string, content: string): Promise<void> {
   const d = await getDb();
   const now = Date.now();
   await d.execute(
-    'INSERT INTO memories (id, content, created_at, updated_at) VALUES (?, ?, ?, ?)',
+    'INSERT INTO memories (id, content, created_at, updated_at, is_pinned, usage_count, last_used_at) VALUES (?, ?, ?, ?, 0, 0, NULL)',
     [id, content, now, now]
   );
 }
@@ -157,6 +160,22 @@ export async function updateMemory(id: string, content: string): Promise<void> {
   await d.execute(
     'UPDATE memories SET content = ?, updated_at = ? WHERE id = ?',
     [content, Date.now(), id]
+  );
+}
+
+export async function togglePinMemory(id: string, isPinned: boolean): Promise<void> {
+  const d = await getDb();
+  await d.execute(
+    'UPDATE memories SET is_pinned = ?, updated_at = ? WHERE id = ?',
+    [isPinned ? 1 : 0, Date.now(), id]
+  );
+}
+
+export async function incrementMemoryUsage(id: string): Promise<void> {
+  const d = await getDb();
+  await d.execute(
+    'UPDATE memories SET usage_count = usage_count + 1, last_used_at = ? WHERE id = ?',
+    [Date.now(), id]
   );
 }
 
@@ -170,22 +189,39 @@ export async function searchMemories(query: string = '', limit: number = 20): Pr
   
   let rows;
   if (query.trim() === '') {
-    rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number }[]>(
-      'SELECT * FROM memories ORDER BY created_at DESC LIMIT ?',
+    rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number; is_pinned: number; usage_count: number; last_used_at: number | null }[]>(
+      'SELECT * FROM memories ORDER BY is_pinned DESC, usage_count DESC, last_used_at DESC LIMIT ?',
       [limit]
     );
   } else {
-    // Simple LIKE search
-    const searchTerm = `%${query}%`;
-    rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number }[]>(
-      'SELECT * FROM memories WHERE content LIKE ? ORDER BY created_at DESC LIMIT ?',
-      [searchTerm, limit]
+    const trimmed = query.trim();
+    const exactQuery = trimmed;
+    const prefixQuery = `${trimmed}%`;
+    const substringQuery = `%${trimmed}%`;
+
+    rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number; is_pinned: number; usage_count: number; last_used_at: number | null }[]>(
+      `SELECT * FROM memories 
+       WHERE content LIKE ? 
+       ORDER BY 
+         CASE 
+           WHEN LOWER(content) = LOWER(?) THEN 1
+           WHEN LOWER(content) LIKE LOWER(?) THEN 2
+           ELSE 3
+         END ASC,
+         is_pinned DESC, 
+         usage_count DESC, 
+         last_used_at DESC 
+       LIMIT ?`,
+      [substringQuery, exactQuery, prefixQuery, limit]
     );
   }
 
   return rows.map(r => ({
     id: r.id,
     content: r.content,
+    isPinned: Boolean(r.is_pinned),
+    usageCount: r.usage_count || 0,
+    lastUsedAt: r.last_used_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at
   }));

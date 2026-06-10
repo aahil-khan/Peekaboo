@@ -79,7 +79,7 @@ export function useShortcuts(handlers: ShortcutHandlers) {
             searchMemories('').then(memories => {
               // Check if it's still open before setting
               if (usePeekStore.getState().memoryOverlay.isOpen) {
-                usePeekStore.getState().setMemoryOverlay({ items: memories.map(m => ({ id: m.id, content: m.content })) });
+                usePeekStore.getState().setMemoryOverlay({ items: memories });
               }
             });
           });

@@ -59,6 +59,40 @@ function CopyButton({ text, label = 'Copy', alignRight = false }: { text: string
   );
 }
 
+function RememberButton({ text }: { text: string }) {
+  const remember = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    let selectedText = window.getSelection()?.toString().trim();
+    const textToRemember = selectedText || text;
+    if (!textToRemember) return;
+    
+    // We dynamically import usePeekStore since it's already used but not imported
+    // Wait, usePeekStore isn't imported in ExchangeView.tsx! We must import it at the top or dynamically.
+    import('../store/peek').then(({ usePeekStore }) => {
+      usePeekStore.getState().setMemoryOverlay({
+        isOpen: true,
+        title: selectedText ? 'Remember Selection' : 'Remember Response',
+        initialSearchQuery: textToRemember
+      });
+    });
+  };
+  return (
+    <button 
+      className="peek-copy-response-btn" 
+      onClick={remember} 
+      title="Save to Memory" 
+      aria-label="Save to Memory"
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+        <polyline points="17 21 17 13 7 13 7 21"></polyline>
+        <polyline points="7 3 7 8 15 8"></polyline>
+      </svg>
+      Remember
+    </button>
+  );
+}
+
 const slideVariants = {
   enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 28 : -28 }),
   center: { opacity: 1, x: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] } },
@@ -185,9 +219,12 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
             ) : null}
           </div>
 
-          {/* Copy button — only on completed responses */}
+          {/* Actions — only on completed responses */}
           {shown.assistant && !isLive && (
-            <CopyButton text={shown.assistant} label="Copy response" />
+            <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-start', marginTop: '8px' }}>
+              <CopyButton text={shown.assistant} label="Copy response" />
+              <RememberButton text={shown.assistant} />
+            </div>
           )}
         </motion.div>
       </AnimatePresence>
