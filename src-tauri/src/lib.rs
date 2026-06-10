@@ -21,17 +21,23 @@ mod commands {
     use tauri::{AppHandle, LogicalPosition, LogicalSize, Emitter};
     use super::get_peek_window;
 
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static POSITIONED: AtomicBool = AtomicBool::new(false);
+
     #[tauri::command]
     pub fn show_peek(app: AppHandle) {
         if let Some(window) = get_peek_window(&app) {
-            if let Ok(Some(monitor)) = window.current_monitor() {
-                let size = monitor.size();
-                let scale = monitor.scale_factor();
-                let logical_w = size.width as f64 / scale;
-                let logical_h = size.height as f64 / scale;
-                let x = (logical_w / 2.0) - 330.0;
-                let y = logical_h * 0.28;
-                let _ = window.set_position(LogicalPosition::new(x, y));
+            if !POSITIONED.load(Ordering::Relaxed) {
+                if let Ok(Some(monitor)) = window.current_monitor() {
+                    let size = monitor.size();
+                    let scale = monitor.scale_factor();
+                    let logical_w = size.width as f64 / scale;
+                    let logical_h = size.height as f64 / scale;
+                    let x = (logical_w / 2.0) - 330.0;
+                    let y = logical_h * 0.28;
+                    let _ = window.set_position(LogicalPosition::new(x, y));
+                    POSITIONED.store(true, Ordering::Relaxed);
+                }
             }
             let _ = window.show();
             let _ = window.set_focus();
@@ -42,8 +48,10 @@ mod commands {
     #[tauri::command]
     pub fn hide_peek(app: AppHandle) {
         if let Some(window) = get_peek_window(&app) {
-            let _ = window.hide();
             let _ = app.emit("peek-visibility", false);
+            // Reset to minimum height before hiding so reopening always starts from the same size
+            let _ = window.set_size(LogicalSize::new(660.0_f64, 80.0_f64));
+            let _ = window.hide();
         }
     }
 
