@@ -26,8 +26,7 @@ export const markdownComponents: Components = {
 
     return React.createElement(
       CopyableCodeBlock,
-      { lang, codeText, className },
-      children
+      { lang, codeText, className, children }
     );
   },
 

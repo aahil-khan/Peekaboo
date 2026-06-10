@@ -55,12 +55,50 @@ mod commands {
         }
     }
 
+    fn get_primary_selection() -> Option<String> {
+        use std::process::Command;
+        let mut selection = None;
+        // Try Wayland primary selection first
+        if let Ok(output) = Command::new("wl-paste").arg("-p").output() {
+            if output.status.success() {
+                if let Ok(text) = String::from_utf8(output.stdout) {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        selection = Some(trimmed.to_string());
+                    }
+                }
+            }
+        }
+        // Fallback to X11 primary selection
+        if selection.is_none() {
+            if let Ok(output) = Command::new("xclip").args(["-o", "-selection", "primary"]).output() {
+                if output.status.success() {
+                    if let Ok(text) = String::from_utf8(output.stdout) {
+                        let trimmed = text.trim();
+                        if !trimmed.is_empty() {
+                            selection = Some(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        // Clear selection if we got one to avoid stale captures
+        if selection.is_some() {
+            let _ = Command::new("wl-copy").args(["-p", "-c"]).status();
+            let _ = Command::new("xclip").args(["-selection", "primary", "/dev/null"]).status();
+        }
+        selection
+    }
+
     #[tauri::command]
     pub fn toggle_peek(app: AppHandle) {
         if let Some(window) = get_peek_window(&app) {
             if window.is_visible().unwrap_or(false) {
                 hide_peek(app);
             } else {
+                if let Some(text) = get_primary_selection() {
+                    let _ = window.emit("peek-highlighted-text", text);
+                }
                 show_peek(app);
             }
         }

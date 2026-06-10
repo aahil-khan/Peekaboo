@@ -24,8 +24,6 @@ import {
   updateSessionTitle,
   getRecentSessions,
   getSessionMessages,
-  getLastUserMessage,
-  saveMemory,
   searchMemories,
 } from '../db/database';
 
@@ -46,7 +44,6 @@ export const PeekSurface: React.FC = () => {
     setActiveSessionId,
     streamingContent,
     isStreaming,
-    backgroundTasks,
     addBackgroundTask,
     updateBackgroundTask,
     clear,
@@ -54,10 +51,20 @@ export const PeekSurface: React.FC = () => {
 
   const { activeModel, setActiveModel, ollamaBaseUrl } = useSettingsStore();
   const { setSessions } = useHistoryStore();
-  const { attachments, add: addAttachment, remove: removeAttachment, clear: clearAttachments } = useAttachments();
+  const { attachments, add: addAttachment, remove: removeAttachment, clear: clearAttachments, buildMessageContent } = useAttachments();
   const { run: runStream, abort: abortStream } = useStream();
   const [showCleared, setShowCleared] = useState(false);
-  const [exchangePos, setExchangePos] = useState<{ current: number; total: number } | null>(null);
+  const [viewingAttachment, setViewingAttachment] = useState<any | null>(null);
+  const viewingAttachmentRef = useRef<any | null>(null);
+  const attachmentsRef = useRef<any[]>([]);
+
+  useEffect(() => {
+    viewingAttachmentRef.current = viewingAttachment;
+  }, [viewingAttachment]);
+
+  useEffect(() => {
+    attachmentsRef.current = attachments;
+  }, [attachments]);
 
   const provider = useMemo(
     () => new OllamaProvider(ollamaBaseUrl),
@@ -113,11 +120,36 @@ export const PeekSurface: React.FC = () => {
       }
     });
 
+    const unlisten3 = listen<string>('peek-highlighted-text', (event) => {
+      const text = event.payload;
+      const trimmed = text.trim();
+      if (trimmed) {
+        if (attachmentsRef.current.some((att) => att.content === trimmed)) {
+          return;
+        }
+        const preview = trimmed.replace(/\s+/g, ' ').slice(0, 20);
+        const label = `Selected: "${preview}${trimmed.length > 20 ? '...' : ''}"`;
+        addAttachment({
+          type: 'selection',
+          label,
+          content: trimmed,
+          mediaType: 'text/plain'
+        });
+      }
+      setTimeout(() => {
+        const ta = document.querySelector('.peek-input') as HTMLTextAreaElement;
+        if (ta) {
+          ta.focus();
+        }
+      }, 50);
+    });
+
     return () => {
       unlisten1.then((fn) => fn());
       unlisten2.then((fn) => fn());
+      unlisten3.then((fn) => fn());
     };
-  }, [setVisible, addAttachment]);
+  }, [setVisible, setInput, addAttachment]);
 
   // ── Dynamic window resize based on content ──
   useEffect(() => {
@@ -144,6 +176,7 @@ export const PeekSurface: React.FC = () => {
       useSettingsStore.getState().setModelsOpen(false);
       usePeekStore.getState().setLegendOpen(false);
       usePeekStore.getState().setMemoryOverlay({ isOpen: false });
+      setViewingAttachment(null);
     }
   }, [visible]);
 
@@ -154,9 +187,12 @@ export const PeekSurface: React.FC = () => {
     
     if (!activeModel) return;
 
-    const userMessage = { role: 'user' as const, content: query };
+    const messageContent = buildMessageContent(query);
+    const hasAttachments = attachments.length > 0;
+    const userMessage = { role: 'user' as const, content: messageContent };
     addMessage(userMessage);
     setInput('');
+    clearAttachments();
 
     // Normal LLM Flow
 
@@ -174,7 +210,7 @@ export const PeekSurface: React.FC = () => {
 
     // Save user message
     try {
-      await saveMessage(generateId(), sessionId, 'user', query);
+      await saveMessage(generateId(), sessionId, 'user', query, hasAttachments);
     } catch (err) {
       console.warn('Failed to save message:', err);
     }
@@ -242,10 +278,17 @@ export const PeekSurface: React.FC = () => {
     runStream,
     setSessions,
     updateBackgroundTask,
+    attachments,
+    buildMessageContent,
+    clearAttachments,
   ]);
 
   // ── Escape handling ──
   const handleEscape = useCallback(() => {
+    if (viewingAttachmentRef.current) {
+      setViewingAttachment(null);
+      return;
+    }
     if (isStreaming) {
       // Dismiss to background — streaming continues
       const sessionId = activeSessionId;
@@ -273,7 +316,6 @@ export const PeekSurface: React.FC = () => {
     abortStream();
     clear();
     clearAttachments();
-    setExchangePos(null);
     setShowCleared(true);
     setTimeout(() => setShowCleared(false), 2000);
   }, [abortStream, clear, clearAttachments]);
@@ -325,14 +367,15 @@ export const PeekSurface: React.FC = () => {
 
   const hasConversation = isStreaming || messages.some((m) => m.role !== 'system');
 
-  const handleExchangeChange = useCallback((current: number, total: number) => {
-    setExchangePos({ current, total });
+  const handleExchangeChange = useCallback((_current: number, _total: number) => {
+    // No-op
   }, []);
 
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
   const { isOpen: isHistoryOpen } = useHistoryStore();
-  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen;
+  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen || !!viewingAttachment;
+  const gridMinHeight = viewingAttachment ? 350 : (isMenuOpen ? 280 : undefined);
 
   return (
     <AnimatePresence>
@@ -348,14 +391,16 @@ export const PeekSurface: React.FC = () => {
           aria-modal="true"
           aria-label="Peekaboo AI Assistant"
         >
-          <div style={{ 
-            position: 'relative', 
-            display: 'grid', 
-            gridTemplateColumns: '1fr', 
-            gridTemplateRows: '1fr',
-            minHeight: isMenuOpen ? 280 : undefined,
-            transition: 'min-height 0.15s ease-out'
-          }}>
+          <motion.div 
+            animate={{ minHeight: gridMinHeight }}
+            transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+            style={{ 
+              position: 'relative', 
+              display: 'grid', 
+              gridTemplateColumns: '1fr', 
+              gridTemplateRows: '1fr',
+            }}
+          >
             {/* Main content */}
             <div className="peek-main" style={{ gridArea: '1 / 1' }}>
               {/* Input */}
@@ -375,7 +420,11 @@ export const PeekSurface: React.FC = () => {
               />
 
               {/* Attachment chips */}
-              <Attachments attachments={attachments} onRemove={removeAttachment} />
+              <Attachments 
+                attachments={attachments} 
+                onRemove={removeAttachment} 
+                onClickAttachment={(att) => setViewingAttachment(att)}
+              />
 
               {/* Status bar */}
               <div className="peek-statusbar">
@@ -435,7 +484,113 @@ export const PeekSurface: React.FC = () => {
             
             {/* Memory Overlay */}
             <MemoryOverlay />
-          </div>
+
+            {/* Attachment Viewer Modal */}
+            <AnimatePresence>
+              {viewingAttachment && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setViewingAttachment(null)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0, 0, 0, 0.4)',
+                    backdropFilter: 'blur(4px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                    borderRadius: '12px',
+                  }}
+                >
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                    transition={{ type: 'spring', duration: 0.3 }}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      background: 'var(--peek-bg)',
+                      border: '1px solid var(--peek-border)',
+                      borderRadius: '8px',
+                      width: '85%',
+                      maxWidth: '500px',
+                      maxHeight: '80%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3)',
+                    }}
+                  >
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      borderBottom: '1px solid var(--peek-border)',
+                    }}>
+                      <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--peek-text)' }}>
+                        {viewingAttachment.label}
+                      </span>
+                      <button
+                        onClick={() => setViewingAttachment(null)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--peek-text-muted)',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div style={{
+                      padding: '16px',
+                      overflowY: 'auto',
+                      flex: 1,
+                    }}>
+                      {viewingAttachment.type === 'screenshot' || (viewingAttachment.type === 'clipboard' && viewingAttachment.mediaType?.startsWith('image/')) ? (
+                        <img 
+                          src={`data:${viewingAttachment.mediaType};base64,${viewingAttachment.content}`} 
+                          alt="Attachment preview"
+                          style={{
+                            maxWidth: '100%',
+                            maxHeight: '300px',
+                            objectFit: 'contain',
+                            borderRadius: '4px',
+                            display: 'block',
+                            margin: '0 auto',
+                          }}
+                        />
+                      ) : (
+                        <pre style={{
+                          margin: 0,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-all',
+                          fontSize: '12px',
+                          color: 'var(--peek-text-secondary)',
+                          fontFamily: 'var(--peek-font-mono)',
+                          lineHeight: '1.5',
+                          textAlign: 'left',
+                        }}>
+                          {viewingAttachment.content}
+                        </pre>
+                      )}
+                    </div>
+                  </motion.div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
         </motion.div>
       )}
     </AnimatePresence>

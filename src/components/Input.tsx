@@ -1,9 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useSettingsStore } from '../store/settings';
 import { usePeekStore } from '../store/peek';
-import { OllamaProvider } from '../providers/ollama';
-import { motion, AnimatePresence } from 'framer-motion';
 
 interface InputProps {
   onSubmit: () => void;
@@ -14,7 +11,6 @@ interface InputProps {
 export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAbort }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { input, setInput, isStreaming, visible } = usePeekStore();
-  const { activeModel, isModelsOpen, setModelsOpen } = useSettingsStore();
 
   // Auto-focus when overlay becomes visible
   useEffect(() => {

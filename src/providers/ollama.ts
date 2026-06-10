@@ -16,11 +16,36 @@ export class OllamaProvider implements Provider {
     model: string,
     signal?: AbortSignal
   ): AsyncGenerator<StreamChunk> {
+    const mappedMessages = messages.map((m) => {
+      if (typeof m.content === 'string') {
+        return { role: m.role, content: m.content };
+      }
+      let text = '';
+      const images: string[] = [];
+      for (const part of m.content) {
+        if (part.type === 'text' && part.text) {
+          text += part.text;
+        } else if (part.type === 'image_url' && part.image_url?.url) {
+          const match = part.image_url.url.match(/^data:image\/[^;]+;base64,(.+)$/);
+          if (match) {
+            images.push(match[1]);
+          } else {
+            images.push(part.image_url.url);
+          }
+        }
+      }
+      return {
+        role: m.role,
+        content: text,
+        images: images.length > 0 ? images : undefined,
+      };
+    });
+
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
-      body: JSON.stringify({ model, messages, stream: true, keep_alive: "5s" }),
+      body: JSON.stringify({ model, messages: mappedMessages, stream: true, keep_alive: "5s" }),
     });
 
     if (!res.ok) {

@@ -93,9 +93,9 @@ function RememberButton({ text }: { text: string }) {
   );
 }
 
-const slideVariants = {
+const slideVariants: any = {
   enter: (dir: number) => ({ opacity: 0, x: dir > 0 ? 28 : -28 }),
-  center: { opacity: 1, x: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] } },
+  center: { opacity: 1, x: 0, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] } },
   exit: (dir: number) => ({ opacity: 0, x: dir > 0 ? -28 : 28, transition: { duration: 0.12, ease: 'easeIn' } }),
 };
 

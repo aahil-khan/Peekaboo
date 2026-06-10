@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, Suspense, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import type { Message } from '../providers/types';
 
 const MarkdownWrapper = React.lazy(() => import('../lib/MarkdownWrapper'));

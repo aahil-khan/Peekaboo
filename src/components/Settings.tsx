@@ -3,7 +3,7 @@ import { useSettingsStore } from '../store/settings';
 
 export const Settings: React.FC = () => {
   const { 
-    hotkey, setHotkey, 
+    hotkey,
     activeProvider,
     ollamaBaseUrl, setOllamaBaseUrl,
     historyRetentionDays,
