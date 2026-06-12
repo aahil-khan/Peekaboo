@@ -36,8 +36,8 @@ export function useShortcuts(handlers: ShortcutHandlers) {
         return;
       }
 
-      // Alt+K → Clear conversation
-      if (isMod && e.key.toLowerCase() === 'k') {
+      // Alt+N → New chat / clear conversation
+      if (isMod && e.key.toLowerCase() === 'n') {
         e.preventDefault();
         onClear();
         return;

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHistoryStore, type Session } from '../store/history';
+import { usePeekStore } from '../store/peek';
 import { historyVariants } from '../lib/motion';
 import { updateSessionTitle, deleteSession, getRecentSessions } from '../db/database';
 
@@ -93,6 +94,10 @@ export const History: React.FC<HistoryProps> = ({ onSelectSession }) => {
     e.stopPropagation();
     await deleteSession(session.id);
     await refreshSessions();
+    const { activeSessionId, clear } = usePeekStore.getState();
+    if (activeSessionId === session.id) {
+      clear();
+    }
   };
 
   useEffect(() => {

@@ -57,7 +57,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   width: 660px;
-  max-height: 500px;
+  max-height: 518px;
   background: var(--peek-bg);
   border-radius: var(--peek-radius);
   box-shadow: var(--peek-shadow);
