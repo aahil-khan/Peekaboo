@@ -8,6 +8,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import './index.css';
 import { PeekSurface } from './components/PeekSurface';
 import { Settings } from './components/Settings';
+import { Setup } from './components/Setup';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 import { invoke } from '@tauri-apps/api/core';
@@ -19,9 +20,10 @@ const App: React.FC = () => {
   React.useEffect(() => {
     try {
       const appWindow = getCurrentWebviewWindow();
+      console.log('[peekaboo] window label:', appWindow.label);
       setWindowLabel(appWindow.label);
     } catch (e) {
-      console.warn("Failed to get window label, defaulting to peekaboo");
+      console.warn('[peekaboo] label detection failed, defaulting to peekaboo:', e);
       setWindowLabel('peekaboo');
     }
   }, []);
@@ -32,10 +34,11 @@ const App: React.FC = () => {
 
     const sync = async () => {
       try {
-        const { autoCaptureSelection } = useSettingsStore.getState();
+        const { autoCaptureSelection, setupCompleted } = useSettingsStore.getState();
         await invoke('update_settings', {
           settings: {
-            auto_capture_selection: autoCaptureSelection
+            auto_capture_selection: autoCaptureSelection,
+            setup_completed: setupCompleted,
           }
         });
       } catch (err) {
@@ -48,7 +51,8 @@ const App: React.FC = () => {
     const unsubscribe = useSettingsStore.subscribe((state) => {
       invoke('update_settings', {
         settings: {
-          auto_capture_selection: state.autoCaptureSelection
+          auto_capture_selection: state.autoCaptureSelection,
+          setup_completed: state.setupCompleted,
         }
       }).catch(err => console.error('Failed to sync settings to Rust:', err));
     });
@@ -58,7 +62,20 @@ const App: React.FC = () => {
 
   if (!windowLabel) return null;
 
-  return windowLabel === 'settings' ? <Settings /> : <PeekSurface />;
+  if (windowLabel !== 'peekaboo') {
+    document.body.style.background = '#18181b';
+    document.documentElement.style.background = '#18181b';
+    document.body.style.overflow = 'auto';
+    document.documentElement.style.overflow = 'auto';
+  } else {
+    // Clip the WebView2 painted area to rounded corners so DWM composites
+    // the transparent window correctly — removes the rectangular window edge mismatch.
+    document.documentElement.style.borderRadius = '16px';
+  }
+
+  if (windowLabel === 'settings') return <Settings />;
+  if (windowLabel === 'setup') return <Setup />;
+  return <PeekSurface />;
 };
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '../store/settings';
 import { historyVariants } from '../lib/motion';
 import { OllamaProvider } from '../providers/ollama';
+import { LlamaProvider } from '../providers/llama';
 import { ModelInfo } from '../providers/types';
 
 export const Models: React.FC = () => {
-  const { activeModel, setActiveModel, isModelsOpen, setModelsOpen, ollamaBaseUrl } = useSettingsStore();
+  const { activeModel, setActiveModel, isModelsOpen, setModelsOpen, activeProvider, ollamaBaseUrl, llamaBaseUrl } = useSettingsStore();
   const [availableModels, setAvailableModels] = React.useState<ModelInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -21,10 +22,10 @@ export const Models: React.FC = () => {
   // Fetch models when opened
   React.useEffect(() => {
     if (isModelsOpen) {
-      const provider = new OllamaProvider(ollamaBaseUrl);
+      const provider = activeProvider === 'llama' ? new LlamaProvider(llamaBaseUrl) : new OllamaProvider(ollamaBaseUrl);
       provider.models().then(setAvailableModels);
     }
-  }, [isModelsOpen, ollamaBaseUrl]);
+  }, [isModelsOpen, activeProvider, ollamaBaseUrl, llamaBaseUrl]);
 
   // Reset selection when opened
   React.useEffect(() => {
