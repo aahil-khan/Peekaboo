@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 
-export type AttachmentType = 'screenshot' | 'clipboard' | 'selection' | 'file';
+export type AttachmentType = 'screenshot' | 'clipboard' | 'selection' | 'file' | 'plugin';
 
 export interface Attachment {
   id: string;

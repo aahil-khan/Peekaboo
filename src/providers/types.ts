@@ -3,6 +3,7 @@
 export interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string | ContentPart[];
+  model?: string;
 }
 
 export interface ContentPart {

@@ -20,7 +20,7 @@ export class ModelPluginProvider implements Provider {
     return plugin !== null;
   }
 
-  async *stream(messages: Message[], model: string, signal?: AbortSignal): AsyncGenerator<string> {
+  async *stream(messages: Message[], _model: string, signal?: AbortSignal): AsyncGenerator<string> {
     const plugin = await registry.getModelPlugin(this.id);
     if (!plugin) throw new Error(`Model plugin ${this.id} not found`);
 

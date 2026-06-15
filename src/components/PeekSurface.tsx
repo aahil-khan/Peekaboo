@@ -34,7 +34,6 @@ import {
   getSessionMessages,
   searchMemories,
   cleanOldSessions,
-  deleteSession,
 } from '../db/database';
 
 function generateId(): string {
@@ -65,7 +64,7 @@ export const PeekSurface: React.FC = () => {
     ollamaBaseUrl, llamaBaseUrl,
     openaiApiKey, openaiBaseUrl,
     anthropicApiKey, geminiApiKey,
-    historyRetentionDays, setModelsOpen, systemPrompt, setupCompleted
+    setupCompleted
   } = useSettingsStore();
   const { status: serverStatus } = useLlamaServer();
   const { setSessions } = useHistoryStore();
@@ -77,7 +76,7 @@ export const PeekSurface: React.FC = () => {
   const viewingAttachmentRef = useRef<any | null>(null);
   const attachmentsRef = useRef<any[]>([]);
   const [isVisionModel, setIsVisionModel] = useState(false);
-  const { enabledInputPlugins, enabledOutputPlugins } = usePluginsStore();
+  const { enabledInputPlugins } = usePluginsStore();
 
   useEffect(() => {
     viewingAttachmentRef.current = viewingAttachment;
@@ -296,7 +295,7 @@ export const PeekSurface: React.FC = () => {
     streamPayload.push(...allMessages);
 
     const onComplete = async (full: string) => {
-      const assistantMessage = { role: 'assistant' as const, content: full };
+      const assistantMessage = { role: 'assistant' as const, content: full, model: activeModel };
       addMessage(assistantMessage);
 
       // Save assistant message
@@ -407,6 +406,7 @@ export const PeekSurface: React.FC = () => {
           msgs.map((m) => ({
             role: m.role,
             content: m.content,
+            model: m.role === 'assistant' ? session.model : undefined
           }))
         );
         setActiveSessionId(session.id);

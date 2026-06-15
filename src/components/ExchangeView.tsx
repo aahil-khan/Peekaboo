@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Message } from '../providers/types';
 import type { Attachment } from '../hooks/useAttachments';
 import { getTextContent, parseUserContent } from '../lib/messageUtils';
+import { useSettingsStore } from '../store/settings';
 
 const MarkdownWrapper = React.lazy(() => import('../lib/MarkdownWrapper'));
 
@@ -10,6 +11,7 @@ interface Exchange {
   user: string;
   images?: string[];
   assistant: string | null;
+  model?: string;
   index: number;
 }
 
@@ -142,6 +144,7 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
           user: getTextContent(visible[i].content),
           images: images.length > 0 ? images : undefined,
           assistant: hasAssistant ? getTextContent(visible[i + 1].content) : null,
+          model: hasAssistant ? visible[i + 1].model : undefined,
           index: result.length,
         });
         if (hasAssistant) i++;
@@ -150,13 +153,19 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
     return result;
   }, [messages]);
 
+  const { activeModel } = useSettingsStore();
+
   // Mutable streaming overlay — doesn't need to be in useMemo since it's ephemeral
   const displayExchanges = useMemo<Exchange[]>(() => {
     if (!isStreaming || exchanges.length === 0) return exchanges;
     const copy = [...exchanges];
-    copy[copy.length - 1] = { ...copy[copy.length - 1], assistant: streamingContent || null };
+    copy[copy.length - 1] = { 
+      ...copy[copy.length - 1], 
+      assistant: streamingContent || null,
+      model: activeModel
+    };
     return copy;
-  }, [exchanges, isStreaming, streamingContent]);
+  }, [exchanges, isStreaming, streamingContent, activeModel]);
 
   const total = displayExchanges.length;
 
@@ -394,18 +403,40 @@ export const ExchangeView: React.FC<ExchangeViewProps> = ({
             ) : null}
           </div>
 
-          {/* Actions — only on completed responses */}
+          {/* Actions & Model Indicator */}
           {(() => {
-            if (!shown.assistant || isLive) return null;
+            if (!shown.assistant) return null;
             const cleanedText = shown.assistant
               .replace(/\n\n\*\(Stopped by user\)\*/i, '')
               .replace(/^\*\(Stopped by user\)\*$/i, '')
               .trim();
-            if (!cleanedText) return null;
+            
             return (
-              <div style={{ display: 'flex', gap: '8px', alignSelf: 'flex-start', marginTop: '8px' }}>
-                <CopyButton text={cleanedText} label="Copy response" />
-                <RememberButton text={cleanedText} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {!isLive && cleanedText && (
+                    <>
+                      <CopyButton text={cleanedText} label="Copy response" />
+                      <RememberButton text={cleanedText} />
+                    </>
+                  )}
+                </div>
+                {shown.model && (
+                  <span style={{ 
+                    fontSize: 10, 
+                    color: 'var(--peek-text-muted)', 
+                    fontFamily: 'var(--peek-font-mono)',
+                    background: 'rgba(255,255,255,0.02)',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--peek-border)',
+                    letterSpacing: '0.02em',
+                    textTransform: 'lowercase',
+                    opacity: 0.85
+                  }}>
+                    {shown.model}
+                  </span>
+                )}
               </div>
             );
           })()}

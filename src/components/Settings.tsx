@@ -55,7 +55,6 @@ import { OpenAIProvider } from '../providers/openai';
 import { AnthropicProvider } from '../providers/anthropic';
 import { GeminiProvider } from '../providers/gemini';
 import { OllamaProvider } from '../providers/ollama';
-import { LlamaProvider } from '../providers/llama';
 
 export const Settings: React.FC = () => {
   const {
@@ -145,41 +144,6 @@ export const Settings: React.FC = () => {
               <Toggle checked={autoCaptureSelection} onChange={setAutoCaptureSelection} />
             </div>
 
-          </div>
-        </section>
-
-        {/* Keyboard Shortcuts Section */}
-        <section style={{ marginBottom: 32 }}>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Keyboard Shortcuts</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, overflow: 'hidden' }}>
-            {[
-              { label: 'Send message', keys: ['Enter'] },
-              { label: 'New line', keys: ['Shift', 'Enter'] },
-              { label: 'Dismiss overlay', keys: ['Esc'] },
-              { label: 'New chat / clear conversation', keys: ['Alt', 'N'] },
-              { label: 'Stop streaming', keys: ['Alt', 'Q'] },
-              { label: 'Toggle history', keys: ['Alt', 'H'] },
-              { label: 'Toggle memory', keys: ['Alt', 'R'] },
-              { label: 'Switch model', keys: ['Alt', 'M'] },
-              { label: 'Open settings', keys: ['Alt', ','] },
-              { label: 'Show shortcuts legend', keys: ['Alt', '/'] },
-            ].map((row, i, arr) => (
-              <div key={row.label} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '10px 16px',
-                borderBottom: i < arr.length - 1 ? '1px solid var(--peek-border)' : 'none',
-              }}>
-                <span style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>{row.label}</span>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  {row.keys.map((k, ki) => (
-                    <React.Fragment key={ki}>
-                      {ki > 0 && <span style={{ fontSize: 11, color: 'var(--peek-text-muted)', alignSelf: 'center' }}>+</span>}
-                      <kbd className="peek-kbd" style={{ fontSize: 11, padding: '2px 6px', height: 'auto' }}>{k}</kbd>
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 

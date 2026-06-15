@@ -16,7 +16,7 @@ interface PluginsState {
 
 export const usePluginsStore = create<PluginsState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       enabledInputPlugins: [],
       enabledOutputPlugins: [],
       manifests: [],
