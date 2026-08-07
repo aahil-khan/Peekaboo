@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePeekStore } from '../store/peek';
-import { historyVariants } from '../lib/motion';
+import { historyVariants, panelRowVariants } from '../lib/motion';
 import { saveMemory, deleteMemory, updateMemory, togglePinMemory, incrementMemoryUsage } from '../db/database';
 
 function generateId(): string {
@@ -255,32 +255,27 @@ export const MemoryOverlay: React.FC = () => {
           exit="exit"
           style={{ zIndex: 105, position: 'absolute' }}
         >
-          <div className="peek-history-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="peek-history-title">{title}</span>
-            </div>
+          <motion.div className="peek-history-header" variants={panelRowVariants}>
+            <span className="peek-panel-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            <span className="peek-history-title">{title}</span>
+            {items.length > 0 && <span className="peek-panel-count">{items.length}</span>}
+            <span className="peek-panel-spacer" />
+            <span className="peek-panel-esc">esc</span>
             <button
+              className="peek-panel-close"
               onClick={() => setMemoryOverlay({ isOpen: false, initialSearchQuery: undefined })}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--peek-text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-                borderRadius: 4,
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = 'var(--peek-text)')}
-              onMouseOut={(e) => (e.currentTarget.style.color = 'var(--peek-text-muted)')}
+              aria-label="Close memories"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-          </div>
+          </motion.div>
           
           <AnimatePresence>
             {isSearchVisible && (
@@ -329,8 +324,17 @@ export const MemoryOverlay: React.FC = () => {
 
           <div className="peek-history-list" ref={scrollContainerRef} style={{ position: 'relative' }}>
             {displayItems.length === 0 ? (
-              <div className="peek-history-empty" style={{ paddingTop: 16 }}>
-                Nothing found
+              <div className="peek-empty">
+                <span className="peek-empty-icon" aria-hidden="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                </span>
+                <span className="peek-empty-title">No memories yet</span>
+                <span className="peek-empty-hint">
+                  Hit “Remember” under any answer, or select some text and press Alt+R, to keep it
+                  here for later.
+                </span>
               </div>
             ) : (
               displayItems.map((item, idx) => (
@@ -405,7 +409,7 @@ export const MemoryOverlay: React.FC = () => {
                       >
                         <div style={{ marginTop: 2 }}>
                           {item.isSaveAction ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--peek-success)' }}>
                               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
                               <polyline points="17 21 17 13 7 13 7 21"></polyline>
                               <polyline points="7 3 7 8 15 8"></polyline>
@@ -428,7 +432,7 @@ export const MemoryOverlay: React.FC = () => {
                             className="peek-history-action-btn"
                             title={item.isPinned ? "Unpin" : "Pin memory"}
                             onClick={(e) => handleTogglePin(e, item)}
-                            style={{ color: item.isPinned ? '#e2b340' : 'inherit' }}
+                            style={{ color: item.isPinned ? 'var(--peek-pin)' : 'inherit' }}
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill={item.isPinned ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path>
@@ -472,7 +476,7 @@ export const MemoryOverlay: React.FC = () => {
                       color: 'var(--peek-text-muted)',
                       opacity: 0.7 
                     }}>
-                      {item.isPinned && <span style={{ color: '#e2b340' }}>Pinned</span>}
+                      {item.isPinned && <span style={{ color: 'var(--peek-pin)' }}>Pinned</span>}
                       <span>{timeAgo(item.createdAt)}</span>
                       {item.usageCount > 0 && <span>Used {item.usageCount} time{item.usageCount !== 1 ? 's' : ''}</span>}
                       {item.lastUsedAt && <span>Active {timeAgo(item.lastUsedAt)}</span>}
@@ -492,7 +496,7 @@ export const MemoryOverlay: React.FC = () => {
                     position: 'absolute',
                     bottom: 12,
                     left: '50%',
-                    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+                    backgroundColor: 'var(--peek-elevated-hi)',
                     border: '1px solid var(--peek-border)',
                     color: 'var(--peek-text)',
                     padding: '6px 14px',
@@ -504,11 +508,11 @@ export const MemoryOverlay: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+                    boxShadow: 'var(--peek-shadow-pop)',
                     backdropFilter: 'blur(4px)',
                   }}
                 >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#4caf50" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" style={{ color: 'var(--peek-success)' }} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                   <span>Copied to clipboard!</span>

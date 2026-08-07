@@ -33,8 +33,15 @@ export const LlamaProfileEditor: React.FC<Props> = ({ profile, onSave, onCancel,
     }
   };
 
+  // Named so the button can say what is missing rather than just sitting dimmed.
+  const missing = [
+    !form.name.trim() && 'a name',
+    !form.binaryPath && 'the server binary',
+    !form.modelPath && 'a model file',
+  ].filter(Boolean) as string[];
+
   const handleSave = () => {
-    if (!form.name.trim() || !form.binaryPath || !form.modelPath) return;
+    if (missing.length > 0) return;
     if (isNew) {
       const id = crypto.randomUUID();
       const newProfile: LlamaProfile = { id, ...form };
@@ -49,91 +56,114 @@ export const LlamaProfileEditor: React.FC<Props> = ({ profile, onSave, onCancel,
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <Field label="Profile Name" hint="e.g. gemma4 E4B, qwen2.5 14B">
+    <div className="peek-form">
+      <Field label="Profile name" hint="However you want to refer to this model">
         <input
+          className="peek-field"
           type="text"
           value={form.name}
           onChange={(e) => set('name', e.target.value)}
-          placeholder="My Model"
-          style={inputStyle}
+          placeholder="e.g. Qwen 2.5 14B"
         />
       </Field>
 
-      <Field label="llama.cpp Binary" hint="llama-cli.exe or llama-server.exe">
+      <Field label="Server binary" hint="The llama-server executable from your llama.cpp build">
         <FileRow
           value={form.binaryPath}
           onChange={(v) => set('binaryPath', v)}
           onBrowse={() => pickFile('binaryPath', 'Select llama binary', 'Executable', ['exe', ''])}
-          placeholder="C:\path\to\llama-cli.exe"
+          placeholder="/path/to/llama-server"
         />
       </Field>
 
-      <Field label="GGUF Model File">
+      <Field label="Model file" hint="A .gguf model file">
         <FileRow
           value={form.modelPath}
           onChange={(v) => set('modelPath', v)}
           onBrowse={() => pickFile('modelPath', 'Select GGUF model', 'GGUF Model', ['gguf'])}
-          placeholder="D:\models\model.gguf"
+          placeholder="/path/to/model.gguf"
         />
       </Field>
 
-      <Field label="mmproj File" hint="Optional — for vision/multimodal models">
+      <Field label="Vision projector" hint="Optional. Only needed for models that can read images (mmproj)">
         <FileRow
           value={form.mmprojPath}
           onChange={(v) => set('mmprojPath', v)}
           onBrowse={() => pickFile('mmprojPath', 'Select mmproj file', 'GGUF Model', ['gguf'])}
-          placeholder="Optional — leave blank for text-only"
+          placeholder="Leave blank for text-only models"
         />
       </Field>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <Field label="Context Size (-c)">
-          <input type="number" value={form.contextSize} onChange={(e) => set('contextSize', parseInt(e.target.value) || 0)} style={inputStyle} />
-        </Field>
-        <Field label="GPU Layers (-ngl)">
-          <input type="number" value={form.nGpuLayers} onChange={(e) => set('nGpuLayers', parseInt(e.target.value) || 0)} style={inputStyle} />
-        </Field>
-        <Field label="Batch Size (-b)">
-          <input type="number" value={form.batchSize} onChange={(e) => set('batchSize', parseInt(e.target.value) || 0)} style={inputStyle} />
-        </Field>
-        <Field label="Ubatch Size (-ub)">
-          <input type="number" value={form.ubatchSize} onChange={(e) => set('ubatchSize', parseInt(e.target.value) || 0)} style={inputStyle} />
-        </Field>
-        <Field label="Parallel Slots">
-          <input type="number" value={form.parallel} onChange={(e) => set('parallel', parseInt(e.target.value) || 1)} style={inputStyle} />
-        </Field>
-        <Field label="Temperature">
-          <input type="number" step="0.1" value={form.temperature} onChange={(e) => set('temperature', parseFloat(e.target.value) || 0)} style={inputStyle} />
-        </Field>
-        <Field label="Host">
-          <input type="text" value={form.host} onChange={(e) => set('host', e.target.value)} style={inputStyle} />
-        </Field>
-        <Field label="Port">
-          <input type="number" value={form.port} onChange={(e) => set('port', parseInt(e.target.value) || 8080)} style={inputStyle} />
-        </Field>
-      </div>
+      {/*
+        Eight numeric tuning fields used to sit inline, which made this form the
+        steepest screen in the app — and it is step two of onboarding. The
+        defaults are fine for almost everyone, so they start collapsed.
+      */}
+      <details className="peek-disclosure">
+        <summary>Advanced tuning</summary>
+        <div className="peek-disclosure-body peek-form">
+          <div className="peek-form-grid">
+            <Field label="Context size" hint="Tokens in view at once (-c)">
+              <input className="peek-field" type="number" value={form.contextSize} onChange={(e) => set('contextSize', parseInt(e.target.value) || 0)} />
+            </Field>
+            <Field label="GPU layers" hint="Layers offloaded to the GPU (-ngl)">
+              <input className="peek-field" type="number" value={form.nGpuLayers} onChange={(e) => set('nGpuLayers', parseInt(e.target.value) || 0)} />
+            </Field>
+            <Field label="Batch size" hint="Tokens per batch (-b)">
+              <input className="peek-field" type="number" value={form.batchSize} onChange={(e) => set('batchSize', parseInt(e.target.value) || 0)} />
+            </Field>
+            <Field label="Micro-batch size" hint="Tokens per sub-batch (-ub)">
+              <input className="peek-field" type="number" value={form.ubatchSize} onChange={(e) => set('ubatchSize', parseInt(e.target.value) || 0)} />
+            </Field>
+            <Field label="Parallel requests" hint="Concurrent slots the server keeps">
+              <input className="peek-field" type="number" value={form.parallel} onChange={(e) => set('parallel', parseInt(e.target.value) || 1)} />
+            </Field>
+            <Field label="Temperature" hint="Higher is more random. 0–2">
+              <input className="peek-field" type="number" step="0.1" value={form.temperature} onChange={(e) => set('temperature', parseFloat(e.target.value) || 0)} />
+            </Field>
+            <Field label="Host" hint="Address the server binds to">
+              <input className="peek-field" type="text" value={form.host} onChange={(e) => set('host', e.target.value)} />
+            </Field>
+            <Field label="Port" hint="Port the server listens on">
+              <input className="peek-field" type="number" value={form.port} onChange={(e) => set('port', parseInt(e.target.value) || 8080)} />
+            </Field>
+          </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 14 }}>
-          <ToggleSwitch checked={form.flashAttn} onChange={(v) => set('flashAttn', v)} />
-          Flash Attention
-        </label>
-      </div>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+            <button
+              type="button"
+              className="peek-switch"
+              role="switch"
+              aria-checked={form.flashAttn}
+              onClick={() => set('flashAttn', !form.flashAttn)}
+            />
+            <span>
+              <span className="peek-form-label">Flash attention</span>
+              <span className="peek-form-hint" style={{ display: 'block' }}>
+                Faster and lighter on memory, on GPUs that support it
+              </span>
+            </span>
+          </label>
+        </div>
+      </details>
 
-      <div style={{ display: 'flex', gap: 10, paddingTop: 4 }}>
+      {missing.length > 0 && (
+        <div className="peek-form-error">
+          Still needs {missing.join(', ').replace(/, ([^,]*)$/, ' and $1')}.
+        </div>
+      )}
+
+      <div className="peek-form-actions">
         {onCancel && (
-          <button onClick={onCancel} style={secondaryBtnStyle}>{cancelLabel}</button>
+          <button className="peek-btn peek-btn--secondary" onClick={onCancel}>{cancelLabel}</button>
         )}
         <button
+          className="peek-btn peek-btn--primary"
+          style={{ flex: 1 }}
           onClick={handleSave}
-          disabled={!form.name.trim() || !form.binaryPath || !form.modelPath}
-          style={{
-            ...primaryBtnStyle,
-            opacity: (!form.name.trim() || !form.binaryPath || !form.modelPath) ? 0.5 : 1,
-          }}
+          disabled={missing.length > 0}
         >
-          {isNew ? 'Add Profile' : 'Save Changes'}
+          {isNew ? 'Add profile' : 'Save changes'}
         </button>
       </div>
     </div>
@@ -141,11 +171,9 @@ export const LlamaProfileEditor: React.FC<Props> = ({ profile, onSave, onCancel,
 };
 
 const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>{label}</label>
-      {hint && <span style={{ fontSize: 11, color: 'var(--peek-text-muted)' }}>{hint}</span>}
-    </div>
+  <div className="peek-form-row">
+    <label className="peek-form-label">{label}</label>
+    {hint && <span className="peek-form-hint">{hint}</span>}
     {children}
   </div>
 );
@@ -156,82 +184,15 @@ const FileRow: React.FC<{
   onBrowse: () => void;
   placeholder?: string;
 }> = ({ value, onChange, onBrowse, placeholder }) => (
-  <div style={{ display: 'flex', gap: 8 }}>
+  <div className="peek-file-row">
     <input
+      className="peek-field peek-field--mono"
       type="text"
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      style={{ ...inputStyle, flex: 1 }}
+      style={{ flex: 1 }}
     />
-    <button onClick={onBrowse} style={browseStyle}>Browse</button>
+    <button className="peek-btn peek-btn--sm" onClick={onBrowse}>Browse</button>
   </div>
 );
-
-const ToggleSwitch: React.FC<{ checked: boolean; onChange: (v: boolean) => void }> = ({ checked, onChange }) => (
-  <button
-    role="switch"
-    aria-checked={checked}
-    onClick={() => onChange(!checked)}
-    style={{
-      width: 36, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', padding: 0,
-      backgroundColor: checked ? '#4caf50' : 'rgba(255,255,255,0.15)',
-      position: 'relative', transition: 'background-color 0.15s', flexShrink: 0,
-    }}
-  >
-    <div style={{
-      width: 16, height: 16, borderRadius: '50%', backgroundColor: '#fff',
-      position: 'absolute', top: 2, left: checked ? 18 : 2,
-      transition: 'left 0.15s', boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-    }} />
-  </button>
-);
-
-const inputStyle: React.CSSProperties = {
-  background: 'rgba(0,0,0,0.2)',
-  border: '1px solid var(--peek-border)',
-  color: 'var(--peek-text)',
-  padding: '7px 10px',
-  borderRadius: 6,
-  fontSize: 13,
-  outline: 'none',
-  fontFamily: 'var(--peek-font-mono)',
-  width: '100%',
-  boxSizing: 'border-box',
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '9px 0',
-  background: '#4caf50',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '9px 20px',
-  background: 'rgba(255,255,255,0.05)',
-  color: 'var(--peek-text)',
-  border: '1px solid var(--peek-border)',
-  borderRadius: 6,
-  fontSize: 14,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
-};
-
-const browseStyle: React.CSSProperties = {
-  padding: '7px 12px',
-  background: 'rgba(255,255,255,0.06)',
-  color: 'var(--peek-text-secondary)',
-  border: '1px solid var(--peek-border)',
-  borderRadius: 6,
-  fontSize: 12,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
-  whiteSpace: 'nowrap',
-};

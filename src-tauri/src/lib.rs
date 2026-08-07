@@ -171,17 +171,33 @@ mod commands {
                 WebviewUrl::App("index.html".into())
             )
             .title("Peekaboo Settings")
-            .inner_size(480.0, 520.0)
+            // Wide enough for the section rail plus a content column; the old
+            // 480x520 forced five sections into one long undifferentiated scroll.
+            .inner_size(780.0, 620.0)
+            .min_inner_size(620.0, 460.0)
             .build();
         }
     }
 
     #[tauri::command]
     pub fn show_setup_mode(app: AppHandle) {
-        use tauri::Manager;
+        use tauri::{Manager, WebviewUrl};
         if let Some(window) = app.get_webview_window("setup") {
             let _ = window.show();
             let _ = window.set_focus();
+        } else {
+            // The setup window is normally pre-created hidden at startup, but
+            // it can be closed outright. Rebuild it so "Run setup again" from
+            // Settings is not a no-op.
+            let _ = tauri::WebviewWindowBuilder::new(
+                &app,
+                "setup",
+                WebviewUrl::App("index.html".into())
+            )
+            .title("Welcome to Peekaboo")
+            .inner_size(820.0, 720.0)
+            .center()
+            .build();
         }
     }
 

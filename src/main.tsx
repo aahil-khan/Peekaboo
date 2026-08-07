@@ -9,38 +9,29 @@ import './index.css';
 import { PeekSurface } from './components/PeekSurface';
 import { Settings } from './components/Settings';
 import { Setup } from './components/Setup';
-import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { windowKind } from './lib/windowLabel';
+import { initThemeRuntime } from './lib/theme';
 
 import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from './store/settings';
 import { usePluginsStore } from './store/plugins';
 
+// Module scope, not a component effect: this must survive StrictMode's
+// double-mount, and it applies to every window equally.
+initThemeRuntime();
+
 const App: React.FC = () => {
-  const [windowLabel, setWindowLabel] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    try {
-      const appWindow = getCurrentWebviewWindow();
-      console.log('[peekaboo] window label:', appWindow.label);
-      setWindowLabel(appWindow.label);
-    } catch (e) {
-      console.warn('[peekaboo] label detection failed, defaulting to peekaboo:', e);
-      setWindowLabel('peekaboo');
-    }
-  }, []);
-
   // ── Background Plugin Discovery ──
   React.useEffect(() => {
-    if (windowLabel === 'peekaboo') {
-      usePluginsStore.getState().refreshManifests().catch(err => {
-        console.warn('Failed to discover plugins on startup:', err);
-      });
-    }
-  }, [windowLabel]);
+    if (windowKind !== 'peek') return;
+    usePluginsStore.getState().refreshManifests().catch(err => {
+      console.warn('Failed to discover plugins on startup:', err);
+    });
+  }, []);
 
   // ── Sync Settings to Rust Backend ──
   React.useEffect(() => {
-    if (windowLabel !== 'peekaboo') return;
+    if (windowKind !== 'peek') return;
 
     const sync = async () => {
       try {
@@ -66,23 +57,12 @@ const App: React.FC = () => {
     });
 
     return () => unsubscribe();
-  }, [windowLabel]);
+  }, []);
 
-  if (!windowLabel) return null;
-
-  if (windowLabel !== 'peekaboo') {
-    document.body.style.background = '#18181b';
-    document.documentElement.style.background = '#18181b';
-    document.body.style.overflow = 'auto';
-    document.documentElement.style.overflow = 'auto';
-  } else {
-    // Clip the WebView2 painted area to rounded corners so DWM composites
-    // the transparent window correctly — removes the rectangular window edge mismatch.
-    document.documentElement.style.borderRadius = '16px';
-  }
-
-  if (windowLabel === 'settings') return <Settings />;
-  if (windowLabel === 'setup') return <Setup />;
+  // Window backgrounds and the overlay's corner clipping are handled in CSS via
+  // the data-window attribute that index.html stamps before first paint.
+  if (windowKind === 'settings') return <Settings />;
+  if (windowKind === 'setup') return <Setup />;
   return <PeekSurface />;
 };
 

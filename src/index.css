@@ -1,33 +1,391 @@
 @import "tailwindcss";
 
-/* ─── Design Tokens ─────────────────────────────────────────────────── */
+/*
+ * Tailwind's `dark:` variant defaults to prefers-color-scheme. Peekaboo drives
+ * its theme from a data attribute so the in-app switcher can override the OS,
+ * so point the variant at that instead. (No Tailwind colour utilities are used
+ * today; this keeps any future ones consistent with the token system.)
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ═══ Scales ════════════════════════════════════════════════════════════
+ *
+ * Mode-independent. Every padding, gap, font-size and radius in the app
+ * resolves to one of these — if a value here doesn't fit, the design is
+ * wrong, not the scale.
+ */
 
 :root {
-  --peek-bg: rgba(24, 24, 27, 0.92);
-  --peek-bg-solid: #18181b;
-  --peek-border: rgba(255, 255, 255, 0.08);
-  --peek-border-focus: rgba(255, 255, 255, 0.15);
-  --peek-text: #fafafa;
-  --peek-text-secondary: #a1a1aa;
-  --peek-text-muted: #71717a;
-  --peek-accent: #818cf8;
-  --peek-accent-dim: rgba(129, 140, 248, 0.15);
-  --peek-error: #f87171;
-  --peek-success: #34d399;
-  --peek-code-bg: rgba(255, 255, 255, 0.06);
-  --peek-hover: rgba(255, 255, 255, 0.04);
-  --peek-radius: 16px;
-  --peek-radius-sm: 8px;
-  --peek-shadow:
-    0 0 0 1px var(--peek-border),
-    0 8px 40px rgba(0, 0, 0, 0.5),
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  /* Spacing */
+  --peek-space-1: 4px;
+  --peek-space-2: 8px;
+  --peek-space-3: 12px;
+  --peek-space-4: 16px;
+  --peek-space-5: 24px;
+  --peek-space-6: 32px;
+
+  /* Type */
+  --peek-text-xs: 11px;
+  --peek-text-sm: 12px;
+  --peek-text-base: 13px;
+  --peek-text-md: 14px;
+  --peek-text-lg: 15px;
+  --peek-text-xl: 20px;
+
+  --peek-leading-tight: 1.4;
+  --peek-leading: 1.55;
+  --peek-leading-relaxed: 1.65;
+
+  /* Radii */
+  --peek-radius-xs: 4px;
+  --peek-radius-sm: 6px;
+  --peek-radius-md: 10px;
+  --peek-radius-lg: 16px;
+
+  /* Geometry.
+   *
+   * The height budget, which four places must agree on:
+   *   input 52 + footer 34 + transcript 396 + attachments ~34 = 516
+   * against .peek-surface's max-height of 518 and the 520 clamp in
+   * PeekSurface.tsx's ResizeObserver. The empty overlay is 52 + 34 = 86,
+   * which is also tauri.conf.json's window height and the clamp's floor.
+   *
+   * If the transcript cap exceeds this budget it does not simply overflow:
+   * .peek-surface is overflow:hidden, so the content clips instead of
+   * scrolling, and only once a conversation is a few turns long. */
+  --peek-transcript-max: 396px;
+  --peek-footer-h: 34px;
+
+  /* Fonts */
   --peek-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --peek-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
 }
 
-/* ─── Base Reset ────────────────────────────────────────────────────── */
+/* ═══ Palettes ══════════════════════════════════════════════════════════
+ *
+ * A theme is a whole palette, not a light/dark mode. Each one supplies nine
+ * colour channels as bare `r, g, b` triples; every other token in the app is
+ * derived from those in the block at the end of this section. Adding a theme
+ * is that one block plus an entry in src/lib/themes.ts.
+ *
+ * Two attributes are stamped on <html>:
+ *   data-theme       which palette
+ *   data-appearance  light or dark, which selects the structural values below
+ *                    (which way overlays tint, how heavy shadows are, whether
+ *                    the glass gets a highlight)
+ *
+ * Channels are triples rather than colours so alpha variants can be derived
+ * with rgba() without repeating the value.
+ */
+
+/* ─── Structural values, by appearance ─────────────────────────────────── */
+
+:root,
+[data-appearance='dark'] {
+  /* Overlays lighten on dark palettes and darken on light ones; recesses
+     (input wells, code blocks) go the other way. */
+  --peek-tint-rgb: 255, 255, 255;
+  --peek-recess-rgb: 0, 0, 0;
+  --peek-input-a: 0.18;
+  --peek-shadow-a: 0.5;
+  --peek-scrim-a: 0.45;
+  /* A hairline of light along the top edge — the standard dark-glass cue.
+     On a pale surface it reads as a smudge, so light drops it. */
+  --peek-glass: inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+  --peek-backdrop: blur(24px) saturate(1.5);
+}
+
+[data-appearance='light'] {
+  --peek-tint-rgb: 0, 0, 0;
+  --peek-recess-rgb: 255, 255, 255;
+  --peek-input-a: 0.7;
+  --peek-shadow-a: 0.16;
+  --peek-scrim-a: 0.28;
+  --peek-glass: inset 0 0 0 0 transparent;
+  /* Less saturation, more blur, a touch of lift: reads as frosted white
+     rather than as a dirty smear of whatever is behind the window. */
+  --peek-backdrop: blur(28px) saturate(1.15) brightness(1.04);
+}
+
+/* ─── Palettes ─────────────────────────────────────────────────────────── */
+
+/* Peekaboo — zinc surfaces, indigo accent. Doubles as the :root fallback so
+   the app still renders if the pre-paint script never ran. */
+:root,
+[data-theme='peek-dark'] {
+  --peek-base-rgb: 24, 24, 27;
+  --peek-elev-rgb: 32, 32, 36;
+  --peek-fg-rgb: 250, 250, 250;
+  --peek-accent-rgb: 129, 140, 248;
+  --peek-on-accent-rgb: 24, 24, 27;
+  --peek-success-rgb: 52, 211, 153;
+  --peek-error-rgb: 248, 113, 113;
+  --peek-warning-rgb: 251, 191, 36;
+  --peek-pin-rgb: 251, 191, 36;
+}
+
+[data-theme='peek-light'] {
+  --peek-base-rgb: 244, 244, 245;
+  --peek-elev-rgb: 255, 255, 255;
+  --peek-fg-rgb: 24, 24, 27;
+  --peek-accent-rgb: 79, 70, 229;
+  --peek-on-accent-rgb: 255, 255, 255;
+  --peek-success-rgb: 21, 128, 61;
+  --peek-error-rgb: 220, 38, 38;
+  --peek-warning-rgb: 180, 83, 9;
+  --peek-pin-rgb: 161, 98, 7;
+}
+
+/* Catppuccin — https://catppuccin.com */
+[data-theme='catppuccin-mocha'] {
+  --peek-base-rgb: 30, 30, 46;
+  --peek-elev-rgb: 49, 50, 68;
+  --peek-fg-rgb: 205, 214, 244;
+  --peek-accent-rgb: 203, 166, 247;
+  --peek-on-accent-rgb: 30, 30, 46;
+  --peek-success-rgb: 166, 227, 161;
+  --peek-error-rgb: 243, 139, 168;
+  --peek-warning-rgb: 249, 226, 175;
+  --peek-pin-rgb: 250, 179, 135;
+}
+
+[data-theme='catppuccin-macchiato'] {
+  --peek-base-rgb: 36, 39, 58;
+  --peek-elev-rgb: 54, 58, 79;
+  --peek-fg-rgb: 202, 211, 245;
+  --peek-accent-rgb: 198, 160, 246;
+  --peek-on-accent-rgb: 36, 39, 58;
+  --peek-success-rgb: 166, 218, 149;
+  --peek-error-rgb: 237, 135, 150;
+  --peek-warning-rgb: 238, 212, 159;
+  --peek-pin-rgb: 245, 169, 127;
+}
+
+[data-theme='catppuccin-latte'] {
+  --peek-base-rgb: 239, 241, 245;
+  --peek-elev-rgb: 255, 255, 255;
+  --peek-fg-rgb: 76, 79, 105;
+  --peek-accent-rgb: 136, 57, 239;
+  --peek-on-accent-rgb: 255, 255, 255;
+  --peek-success-rgb: 64, 160, 43;
+  --peek-error-rgb: 210, 15, 57;
+  --peek-warning-rgb: 223, 142, 29;
+  --peek-pin-rgb: 254, 100, 11;
+}
+
+/* Tokyo Night */
+[data-theme='tokyo-night'] {
+  --peek-base-rgb: 26, 27, 38;
+  --peek-elev-rgb: 36, 40, 59;
+  --peek-fg-rgb: 192, 202, 245;
+  --peek-accent-rgb: 122, 162, 247;
+  --peek-on-accent-rgb: 26, 27, 38;
+  --peek-success-rgb: 158, 206, 106;
+  --peek-error-rgb: 247, 118, 142;
+  --peek-warning-rgb: 224, 175, 104;
+  --peek-pin-rgb: 255, 158, 100;
+}
+
+[data-theme='tokyo-night-day'] {
+  --peek-base-rgb: 225, 226, 231;
+  --peek-elev-rgb: 240, 241, 245;
+  --peek-fg-rgb: 52, 84, 138;
+  --peek-accent-rgb: 47, 90, 190;
+  --peek-on-accent-rgb: 255, 255, 255;
+  --peek-success-rgb: 88, 122, 27;
+  --peek-error-rgb: 194, 59, 92;
+  --peek-warning-rgb: 143, 94, 21;
+  --peek-pin-rgb: 150, 88, 40;
+}
+
+/* Nord — https://nordtheme.com */
+[data-theme='nord'] {
+  --peek-base-rgb: 46, 52, 64;
+  --peek-elev-rgb: 59, 66, 82;
+  --peek-fg-rgb: 216, 222, 233;
+  --peek-accent-rgb: 136, 192, 208;
+  --peek-on-accent-rgb: 46, 52, 64;
+  --peek-success-rgb: 163, 190, 140;
+  --peek-error-rgb: 191, 97, 106;
+  --peek-warning-rgb: 235, 203, 139;
+  --peek-pin-rgb: 208, 135, 112;
+}
+
+/* Gruvbox */
+[data-theme='gruvbox-dark'] {
+  --peek-base-rgb: 40, 40, 40;
+  --peek-elev-rgb: 60, 56, 54;
+  --peek-fg-rgb: 235, 219, 178;
+  --peek-accent-rgb: 131, 165, 152;
+  --peek-on-accent-rgb: 40, 40, 40;
+  --peek-success-rgb: 184, 187, 38;
+  --peek-error-rgb: 251, 73, 52;
+  --peek-warning-rgb: 250, 189, 47;
+  --peek-pin-rgb: 254, 128, 25;
+}
+
+[data-theme='gruvbox-light'] {
+  --peek-base-rgb: 251, 241, 199;
+  --peek-elev-rgb: 255, 250, 226;
+  --peek-fg-rgb: 60, 56, 54;
+  --peek-accent-rgb: 7, 102, 120;
+  --peek-on-accent-rgb: 251, 241, 199;
+  --peek-success-rgb: 121, 116, 14;
+  --peek-error-rgb: 157, 0, 6;
+  --peek-warning-rgb: 181, 118, 20;
+  --peek-pin-rgb: 175, 58, 3;
+}
+
+/* Rosé Pine — https://rosepinetheme.com */
+[data-theme='rose-pine'] {
+  --peek-base-rgb: 25, 23, 36;
+  --peek-elev-rgb: 38, 35, 58;
+  --peek-fg-rgb: 224, 222, 244;
+  --peek-accent-rgb: 196, 167, 231;
+  --peek-on-accent-rgb: 25, 23, 36;
+  --peek-success-rgb: 156, 207, 216;
+  --peek-error-rgb: 235, 111, 146;
+  --peek-warning-rgb: 246, 193, 119;
+  --peek-pin-rgb: 235, 188, 186;
+}
+
+[data-theme='rose-pine-dawn'] {
+  --peek-base-rgb: 250, 244, 237;
+  --peek-elev-rgb: 255, 250, 243;
+  --peek-fg-rgb: 87, 82, 121;
+  --peek-accent-rgb: 144, 122, 169;
+  --peek-on-accent-rgb: 255, 255, 255;
+  --peek-success-rgb: 40, 105, 131;
+  --peek-error-rgb: 180, 99, 122;
+  --peek-warning-rgb: 234, 157, 52;
+  --peek-pin-rgb: 215, 130, 126;
+}
+
+/* Solarized — https://ethanschoonover.com/solarized */
+[data-theme='solarized-dark'] {
+  --peek-base-rgb: 0, 43, 54;
+  --peek-elev-rgb: 7, 54, 66;
+  --peek-fg-rgb: 147, 161, 161;
+  --peek-accent-rgb: 38, 139, 210;
+  --peek-on-accent-rgb: 253, 246, 227;
+  --peek-success-rgb: 133, 153, 0;
+  --peek-error-rgb: 220, 50, 47;
+  --peek-warning-rgb: 181, 137, 0;
+  --peek-pin-rgb: 203, 75, 22;
+}
+
+[data-theme='solarized-light'] {
+  --peek-base-rgb: 253, 246, 227;
+  --peek-elev-rgb: 255, 252, 242;
+  --peek-fg-rgb: 88, 110, 117;
+  --peek-accent-rgb: 38, 139, 210;
+  --peek-on-accent-rgb: 253, 246, 227;
+  --peek-success-rgb: 133, 153, 0;
+  --peek-error-rgb: 220, 50, 47;
+  --peek-warning-rgb: 181, 137, 0;
+  --peek-pin-rgb: 203, 75, 22;
+}
+
+/* ─── Accent override ──────────────────────────────────────────────────── */
+
+/*
+ * Optional. `data-accent` is only stamped when the user picks something other
+ * than "auto" — the default is the palette's own accent, because Catppuccin's
+ * mauve is part of Catppuccin. Declared after the palettes so it wins.
+ */
+[data-accent='indigo']  { --peek-accent-rgb: 129, 140, 248; --peek-on-accent-rgb: 24, 24, 27; }
+[data-accent='emerald'] { --peek-accent-rgb:  52, 211, 153; --peek-on-accent-rgb: 24, 24, 27; }
+[data-accent='amber']   { --peek-accent-rgb: 251, 191,  36; --peek-on-accent-rgb: 24, 24, 27; }
+[data-accent='rose']    { --peek-accent-rgb: 251, 113, 133; --peek-on-accent-rgb: 24, 24, 27; }
+[data-accent='sky']     { --peek-accent-rgb:  56, 189, 248; --peek-on-accent-rgb: 24, 24, 27; }
+
+[data-appearance='light'][data-accent='indigo']  { --peek-accent-rgb:  79,  70, 229; --peek-on-accent-rgb: 255, 255, 255; }
+[data-appearance='light'][data-accent='emerald'] { --peek-accent-rgb:   5, 150, 105; --peek-on-accent-rgb: 255, 255, 255; }
+[data-appearance='light'][data-accent='amber']   { --peek-accent-rgb: 180,  83,   9; --peek-on-accent-rgb: 255, 255, 255; }
+[data-appearance='light'][data-accent='rose']    { --peek-accent-rgb: 225,  29,  72; --peek-on-accent-rgb: 255, 255, 255; }
+[data-appearance='light'][data-accent='sky']     { --peek-accent-rgb:   2, 132, 199; --peek-on-accent-rgb: 255, 255, 255; }
+
+/* ─── Derived tokens ───────────────────────────────────────────────────── */
+
+/*
+ * Everything the components actually reference. Nothing below is per-theme —
+ * these resolve against whichever channels are live.
+ */
+:root {
+  /* Surfaces */
+  --peek-bg: rgba(var(--peek-base-rgb), 0.92);
+  --peek-bg-solid: rgb(var(--peek-base-rgb));
+  /* Opaque on purpose. The surface underneath is translucent over the live
+     desktop; a translucent panel on top of it let the wallpaper read through. */
+  --peek-panel-bg: rgb(var(--peek-base-rgb));
+  --peek-surface-1: rgba(var(--peek-tint-rgb), 0.03);
+  --peek-surface-2: rgba(var(--peek-tint-rgb), 0.06);
+  --peek-surface-3: rgba(var(--peek-tint-rgb), 0.1);
+  --peek-hover: rgba(var(--peek-tint-rgb), 0.05);
+  --peek-active: rgba(var(--peek-tint-rgb), 0.09);
+  --peek-badge-bg: rgba(var(--peek-tint-rgb), 0.05);
+  --peek-kbd-bg: rgba(var(--peek-tint-rgb), 0.07);
+  --peek-code-bg: rgba(var(--peek-tint-rgb), 0.07);
+  --peek-code-block-bg: rgba(var(--peek-tint-rgb), 0.045);
+  --peek-code-header-bg: rgba(var(--peek-tint-rgb), 0.08);
+  --peek-elevated: rgb(var(--peek-elev-rgb));
+  --peek-elevated-hi: rgb(var(--peek-elev-rgb));
+  --peek-input-bg: rgba(var(--peek-recess-rgb), var(--peek-input-a));
+  --peek-input-bg-hi: rgba(var(--peek-recess-rgb), calc(var(--peek-input-a) + 0.12));
+  --peek-scrim: rgba(0, 0, 0, var(--peek-scrim-a));
+  --peek-toggle-off: rgba(var(--peek-tint-rgb), 0.14);
+  --peek-toggle-knob: rgb(var(--peek-fg-rgb));
+
+  /* Lines */
+  --peek-border: rgba(var(--peek-tint-rgb), 0.1);
+  --peek-border-subtle: rgba(var(--peek-tint-rgb), 0.13);
+  --peek-border-focus: rgba(var(--peek-tint-rgb), 0.2);
+  --peek-border-strong: rgba(var(--peek-tint-rgb), 0.28);
+  --peek-divider: rgba(var(--peek-tint-rgb), 0.07);
+
+  /* Text */
+  --peek-text: rgb(var(--peek-fg-rgb));
+  --peek-text-secondary: rgba(var(--peek-fg-rgb), 0.72);
+  --peek-text-muted: rgba(var(--peek-fg-rgb), 0.5);
+  --peek-text-inverse: rgb(var(--peek-base-rgb));
+
+  /* Accent */
+  --peek-accent: rgb(var(--peek-accent-rgb));
+  --peek-accent-contrast: rgb(var(--peek-on-accent-rgb));
+  --peek-accent-soft: rgba(var(--peek-accent-rgb), 0.12);
+  --peek-accent-soft-hover: rgba(var(--peek-accent-rgb), 0.18);
+  --peek-accent-dim: rgba(var(--peek-accent-rgb), 0.15);
+  --peek-accent-line: rgba(var(--peek-accent-rgb), 0.28);
+  --peek-accent-line-strong: rgba(var(--peek-accent-rgb), 0.45);
+
+  /* Status */
+  --peek-success: rgb(var(--peek-success-rgb));
+  --peek-success-soft: rgba(var(--peek-success-rgb), 0.14);
+  --peek-success-line: rgba(var(--peek-success-rgb), 0.32);
+  --peek-error: rgb(var(--peek-error-rgb));
+  --peek-error-soft: rgba(var(--peek-error-rgb), 0.14);
+  --peek-error-line: rgba(var(--peek-error-rgb), 0.32);
+  --peek-warning: rgb(var(--peek-warning-rgb));
+  --peek-warning-soft: rgba(var(--peek-warning-rgb), 0.14);
+  --peek-warning-line: rgba(var(--peek-warning-rgb), 0.32);
+  --peek-pin: rgb(var(--peek-pin-rgb));
+
+  /* Chrome */
+  --peek-scrollbar-thumb: rgba(var(--peek-tint-rgb), 0.14);
+  --peek-scrollbar-thumb-hover: rgba(var(--peek-tint-rgb), 0.24);
+  --peek-shadow:
+    0 0 0 1px var(--peek-border),
+    0 8px 40px rgba(0, 0, 0, var(--peek-shadow-a)),
+    0 2px 8px rgba(0, 0, 0, calc(var(--peek-shadow-a) * 0.6)),
+    var(--peek-glass);
+  --peek-shadow-pop: 0 4px 12px rgba(0, 0, 0, calc(var(--peek-shadow-a) * 0.7));
+  --peek-shadow-menu: 0 8px 24px rgba(0, 0, 0, calc(var(--peek-shadow-a) * 0.75));
+  --peek-shadow-modal:
+    0 20px 25px -5px rgba(0, 0, 0, calc(var(--peek-shadow-a) * 0.7)),
+    0 10px 10px -5px rgba(0, 0, 0, calc(var(--peek-shadow-a) * 0.5));
+}
+
+/* ═══ Base Reset ════════════════════════════════════════════════════════ */
 
 *,
 *::before,
@@ -43,7 +401,7 @@ html, body, #root {
   background: transparent;
   overflow: hidden;
   font-family: var(--peek-font);
-  font-size: 14px;
+  font-size: var(--peek-text-md);
   color: var(--peek-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -51,19 +409,410 @@ html, body, #root {
   user-select: none;
 }
 
-/* ─── Peek Surface ──────────────────────────────────────────────────── */
+/* ─── Per-window Chrome ─────────────────────────────────────────────── */
+
+/*
+ * `data-window` is stamped onto <html> by the pre-paint script in index.html.
+ * These rules replace the imperative `document.body.style.*` writes that used
+ * to run in main.tsx after mount — doing it in CSS means the correct
+ * background is on screen for the very first frame.
+ */
+
+/* Settings and Setup are ordinary decorated OS windows: solid, and scrollable. */
+html[data-window='settings'],
+html[data-window='setup'],
+html[data-window='settings'] body,
+html[data-window='setup'] body {
+  background: var(--peek-bg-solid);
+  color: var(--peek-text);
+  overflow: auto;
+}
+
+/*
+ * Clip the webview's painted area to the surface radius so the compositor
+ * renders the transparent overlay without a rectangular edge showing through.
+ */
+html[data-window='peek'] {
+  border-radius: var(--peek-radius-lg);
+}
+
+/* ═══ Shared Controls ═══════════════════════════════════════════════════ */
+
+/*
+ * The canonical icon button: footer actions, panel close buttons, row
+ * actions. Hover and focus live here rather than in JS mouse handlers so
+ * keyboard users get the same affordance, and so the style survives a
+ * re-render mid-hover (inline-style hover state does not).
+ */
+.peek-icon-btn,
+.peek-panel-close,
+.peek-scroll-bottom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-icon-btn:hover:not(:disabled),
+.peek-panel-close:hover:not(:disabled) {
+  color: var(--peek-text);
+  background: var(--peek-hover);
+}
+
+/* Close affordance shared by History, Models, Legend and Memory panels. */
+.peek-panel-close {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.peek-icon-btn:focus-visible,
+.peek-scroll-bottom-btn:focus-visible {
+  outline: none;
+  color: var(--peek-text);
+  border-color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+}
+
+.peek-icon-btn:active:not(:disabled) {
+  background: var(--peek-active);
+}
+
+.peek-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/*
+ * Outlined variant, for small labelled or square actions. The named component
+ * classes are listed here rather than composed in markup so each stays a
+ * single class at the call site.
+ */
+.peek-copy-response-btn,
+.peek-code-copy-btn,
+.peek-history-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--peek-space-1);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.peek-copy-response-btn:hover:not(:disabled),
+.peek-code-copy-btn:hover:not(:disabled),
+.peek-history-action-btn:hover:not(:disabled) {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+  background: var(--peek-hover);
+}
+
+.peek-copy-response-btn:focus-visible,
+.peek-code-copy-btn:focus-visible,
+.peek-history-action-btn:focus-visible {
+  outline: none;
+  border-color: var(--peek-accent);
+  color: var(--peek-text);
+}
+
+/*
+ * Shared thin-scrollbar treatment. Applied by selector group for the same
+ * reason as the buttons above — these elements each carry one class.
+ */
+.peek-transcript,
+.peek-table-wrapper,
+.peek-code-block,
+.peek-history-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--peek-scrollbar-thumb) transparent;
+}
+
+.peek-transcript::-webkit-scrollbar,
+.peek-table-wrapper::-webkit-scrollbar,
+.peek-code-block::-webkit-scrollbar,
+.peek-history-list::-webkit-scrollbar { width: 4px; height: 4px; }
+
+.peek-transcript::-webkit-scrollbar-track,
+.peek-table-wrapper::-webkit-scrollbar-track,
+.peek-code-block::-webkit-scrollbar-track,
+.peek-history-list::-webkit-scrollbar-track { background: transparent; }
+
+.peek-transcript::-webkit-scrollbar-thumb,
+.peek-table-wrapper::-webkit-scrollbar-thumb,
+.peek-code-block::-webkit-scrollbar-thumb,
+.peek-history-list::-webkit-scrollbar-thumb {
+  background: var(--peek-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+.peek-transcript::-webkit-scrollbar-thumb:hover,
+.peek-table-wrapper::-webkit-scrollbar-thumb:hover,
+.peek-code-block::-webkit-scrollbar-thumb:hover,
+.peek-history-list::-webkit-scrollbar-thumb:hover {
+  background: var(--peek-scrollbar-thumb-hover);
+}
+
+/* ═══ Forms ═════════════════════════════════════════════════════════════
+ *
+ * Settings, Setup and LlamaProfileEditor each carried their own near-identical
+ * copy of these styles as inline style objects. One definition, three callers.
+ */
+
+.peek-field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--peek-input-bg);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  padding: 7px var(--peek-space-2);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.peek-field:focus {
+  border-color: var(--peek-accent);
+}
+
+.peek-field::placeholder {
+  color: var(--peek-text-muted);
+}
+
+.peek-field--mono {
+  font-family: var(--peek-font-mono);
+}
+
+.peek-field--textarea {
+  resize: vertical;
+  line-height: var(--peek-leading);
+}
+
+.peek-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--peek-space-2) var(--peek-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-sm);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.peek-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.peek-btn:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: 2px;
+}
+
+.peek-btn--primary {
+  background: var(--peek-accent);
+  color: var(--peek-accent-contrast);
+  font-weight: 600;
+}
+
+.peek-btn--primary:hover:not(:disabled) {
+  background: rgba(var(--peek-accent-rgb), 0.85);
+}
+
+.peek-btn--secondary {
+  background: var(--peek-surface-2);
+  color: var(--peek-text);
+  border-color: var(--peek-border);
+}
+
+.peek-btn--secondary:hover:not(:disabled) {
+  background: var(--peek-surface-3);
+}
+
+.peek-btn--danger {
+  background: var(--peek-error-soft);
+  color: var(--peek-error);
+  border-color: var(--peek-error-line);
+}
+
+.peek-btn--danger:hover:not(:disabled) {
+  background: var(--peek-error-soft);
+  border-color: var(--peek-error);
+}
+
+.peek-btn--sm {
+  padding: 7px var(--peek-space-3);
+  font-size: var(--peek-text-sm);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-secondary);
+  border-color: var(--peek-border);
+  white-space: nowrap;
+}
+
+.peek-btn--sm:hover:not(:disabled) {
+  background: var(--peek-surface-3);
+  color: var(--peek-text);
+}
+
+/* Form layout */
+
+.peek-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-3);
+}
+
+.peek-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.peek-form-label {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+}
+
+.peek-form-hint {
+  font-size: var(--peek-text-xs);
+  color: var(--peek-text-muted);
+}
+
+.peek-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--peek-space-3);
+}
+
+.peek-form-actions {
+  display: flex;
+  gap: var(--peek-space-2);
+  padding-top: var(--peek-space-1);
+}
+
+.peek-form-error {
+  font-size: var(--peek-text-sm);
+  color: var(--peek-warning);
+}
+
+.peek-file-row {
+  display: flex;
+  gap: var(--peek-space-2);
+}
+
+/* Collapsible section, used to keep advanced tuning out of the way. */
+.peek-disclosure {
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-surface-1);
+}
+
+.peek-disclosure > summary {
+  padding: var(--peek-space-2) var(--peek-space-3);
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.peek-disclosure > summary::-webkit-details-marker { display: none; }
+
+.peek-disclosure > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--peek-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.peek-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.peek-disclosure > summary:hover {
+  color: var(--peek-text);
+}
+
+.peek-disclosure-body {
+  padding: 0 var(--peek-space-3) var(--peek-space-3);
+}
+
+/*
+ * Toggle switch. The knob is a pseudo-element driven off aria-checked, so the
+ * accessible state and the visual state cannot drift apart.
+ */
+.peek-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--peek-toggle-off);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.peek-switch[aria-checked='true'] {
+  background: var(--peek-accent);
+}
+
+.peek-switch:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: 2px;
+}
+
+.peek-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--peek-toggle-knob);
+  box-shadow: var(--peek-shadow-pop);
+  transition: left 0.15s ease;
+}
+
+.peek-switch[aria-checked='true']::after {
+  left: 18px;
+}
+
+/* ═══ Peek Surface ══════════════════════════════════════════════════════ */
 
 .peek-surface {
   display: flex;
   flex-direction: column;
   width: 660px;
+  /* Coupled to --peek-transcript-max and the clamp in PeekSurface.tsx. */
   max-height: 518px;
   background: var(--peek-bg);
-  border-radius: var(--peek-radius);
+  border-radius: var(--peek-radius-lg);
   box-shadow: var(--peek-shadow);
   overflow: hidden;
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: var(--peek-backdrop);
+  -webkit-backdrop-filter: var(--peek-backdrop);
   position: relative;
 }
 
@@ -73,13 +822,13 @@ html, body, #root {
   min-height: 0;
 }
 
-/* ─── Input ─────────────────────────────────────────────────────────── */
+/* ═══ Input ═════════════════════════════════════════════════════════════ */
 
 .peek-input-container {
   display: flex;
   align-items: flex-start;
-  padding: 14px 16px;
-  gap: 12px;
+  padding: var(--peek-space-3) var(--peek-space-4);
+  gap: var(--peek-space-3);
   border-bottom: 1px solid var(--peek-border);
 }
 
@@ -101,9 +850,9 @@ html, body, #root {
   outline: none;
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 15px;
+  font-size: var(--peek-text-lg);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: var(--peek-leading);
   resize: none;
   caret-color: var(--peek-accent);
   overflow: hidden;
@@ -120,15 +869,29 @@ html, body, #root {
 
 .peek-input-status {
   flex-shrink: 0;
-  margin-top: 4px;
+  margin-top: var(--peek-space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--peek-text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
 }
 
-.peek-streaming-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--peek-accent);
-  animation: peek-pulse 1.5s ease-in-out infinite;
+.peek-input-status:hover,
+.peek-input-status:focus-visible {
+  outline: none;
+  color: var(--peek-error);
+}
+
+.peek-stop-icon {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  border-radius: 2px;
 }
 
 .peek-input-hint {
@@ -143,34 +906,133 @@ html, body, #root {
   height: 22px;
   min-width: 22px;
   padding: 0 6px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-kbd-bg);
+  border: 1px solid var(--peek-border-subtle);
   color: var(--peek-text-muted);
   font-family: var(--peek-font);
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   font-weight: 500;
 }
 
-/* ─── Attachment Chips ──────────────────────────────────────────────── */
+/* ═══ Slash Command Menu ════════════════════════════════════════════════ */
+
+/*
+ * In normal flow, not an absolutely-positioned popover.
+ *
+ * As a popover it contributed nothing to the surface's measured height, so the
+ * ResizeObserver never grew the window — the menu drew on top of the footer and
+ * got clipped by .peek-surface's overflow:hidden. In flow it pushes the surface
+ * taller and the window follows, which is how every other row here works.
+ */
+/*
+ * Deliberately the same row idiom as the History and Models lists: a quiet
+ * list in the surface, not a component with its own furniture. Selection is
+ * carried by the accent rule those lists already use.
+ */
+.peek-slash-menu {
+  flex-shrink: 0;
+  max-height: 216px;
+  overflow-y: auto;
+  padding: var(--peek-space-1);
+  border-bottom: 1px solid var(--peek-border);
+}
+
+.peek-slash-empty {
+  padding: var(--peek-space-2) var(--peek-space-3);
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+}
+
+.peek-slash-group {
+  padding: var(--peek-space-2) var(--peek-space-3) var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--peek-text-muted);
+}
+
+.peek-slash-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--peek-space-3);
+  position: relative;
+  width: 100%;
+  padding: 6px var(--peek-space-3);
+  border: none;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s ease;
+}
+
+.peek-slash-item::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--peek-accent);
+  transform: translateY(-50%);
+  transition: height 0.14s ease;
+}
+
+.peek-slash-item[aria-selected='true'] {
+  background: var(--peek-hover);
+}
+
+.peek-slash-item[aria-selected='true']::before {
+  height: 58%;
+}
+
+.peek-slash-item-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Meta sits at the end of the row rather than under the title — vertical
+   space in the overlay is the scarce resource. */
+.peek-slash-item-subtitle {
+  margin-left: auto;
+  padding-left: var(--peek-space-2);
+  flex-shrink: 0;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--peek-text-xs);
+  color: var(--peek-text-muted);
+}
+
+/* ═══ Attachment Chips ══════════════════════════════════════════════════ */
 
 .peek-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 16px 10px;
+  padding: var(--peek-space-1) var(--peek-space-4) var(--peek-space-2);
 }
 
 .peek-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 6px;
-  border-radius: 6px;
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  padding: 3px var(--peek-space-2) 3px 6px;
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-accent-soft);
+  border: 1px solid var(--peek-accent-line);
   color: var(--peek-text-secondary);
-  font-size: 12px;
+  font-size: var(--peek-text-sm);
   font-weight: 500;
   max-width: 220px;
   user-select: none;
@@ -182,19 +1044,19 @@ html, body, #root {
 }
 
 .peek-chip.peek-clickable:hover {
-  background: rgba(129, 140, 248, 0.16);
+  background: var(--peek-accent-soft-hover);
   color: var(--peek-text);
-  border-color: rgba(129, 140, 248, 0.35);
+  border-color: var(--peek-accent-line-strong);
   transform: translateY(-0.5px);
 }
 
 .peek-chip.peek-clickable:active {
   transform: translateY(0.5px);
-  background: rgba(129, 140, 248, 0.12);
+  background: var(--peek-accent-dim);
 }
 
 .peek-chip-icon {
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   line-height: 1;
   opacity: 0.7;
   flex-shrink: 0;
@@ -215,7 +1077,7 @@ html, body, #root {
   border: none;
   background: transparent;
   color: var(--peek-text-muted);
-  font-size: 14px;
+  font-size: var(--peek-text-md);
   line-height: 1;
   cursor: pointer;
   border-radius: 3px;
@@ -226,330 +1088,81 @@ html, body, #root {
 
 .peek-chip-remove:hover {
   color: var(--peek-text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--peek-surface-3);
 }
 
-/* ─── Status Bar ────────────────────────────────────────────────────── */
+/* ═══ Status ════════════════════════════════════════════════════════════ */
 
-.peek-statusbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 16px;
-  min-height: 28px;
-}
-
-.peek-status-left,
-.peek-status-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.peek-status-model {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--peek-text-muted);
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
-  letter-spacing: 0.01em;
-}
-
-.peek-status-error {
-  font-size: 11px;
-  color: var(--peek-error);
-  font-weight: 500;
-}
-
-.peek-bg-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--peek-accent);
-  font-weight: 500;
-}
-
-.peek-bg-dot {
+/* Small state dot; takes its colour from the parent's .peek-tone-* class so
+   one rule covers connecting / running / stopped / failed. */
+.peek-status-dot {
+  display: inline-block;
   width: 6px;
   height: 6px;
+  margin-right: 5px;
   border-radius: 50%;
-  background: var(--peek-accent);
-  animation: peek-pulse 2s ease-in-out infinite;
-}
-
-/* ─── Exchange View (Paged) ─────────────────────────────────────────── */
-
-.peek-exchange-view {
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-  position: relative;
-}
-
-.peek-exchange-card {
-  padding: 12px 16px 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 380px;
-  max-width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-.peek-exchange-card::-webkit-scrollbar { width: 4px; }
-.peek-exchange-card::-webkit-scrollbar-track { background: transparent; }
-.peek-exchange-card::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-/* User question bubble */
-.peek-exchange-user {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.peek-exchange-user-bubble {
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.18);
-  color: var(--peek-text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 6px 12px;
-  border-radius: 14px 14px 4px 14px;
-  max-width: 100%;
-  word-break: break-word;
-  user-select: text;
-  font-style: italic;
-  white-space: pre-wrap;
-}
-
-/* Assistant response */
-.peek-exchange-assistant {
-  font-size: 13.5px;
-  line-height: 1.65;
-  color: var(--peek-text);
-  user-select: text;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-wrap: break-word;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-.peek-exchange-assistant::-webkit-scrollbar {
-  height: 4px;
-}
-.peek-exchange-assistant::-webkit-scrollbar-track {
-  background: transparent;
-}
-.peek-exchange-assistant::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-/* Markdown in exchange */
-.peek-exchange-assistant p { margin-bottom: 0.75em; }
-.peek-exchange-assistant p:last-child { margin-bottom: 0; }
-.peek-exchange-assistant h1, .peek-exchange-assistant h2, .peek-exchange-assistant h3 {
-  font-weight: 600; margin: 1em 0 0.5em;
-}
-.peek-exchange-assistant h1 { font-size: 1.25em; }
-.peek-exchange-assistant h2 { font-size: 1.1em; }
-.peek-exchange-assistant h3 { font-size: 1em; }
-.peek-exchange-assistant strong { font-weight: 600; }
-.peek-exchange-assistant em { font-style: italic; color: var(--peek-text-secondary); }
-.peek-exchange-assistant ul, .peek-exchange-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
-.peek-exchange-assistant li { margin-bottom: 0.3em; }
-.peek-exchange-assistant blockquote {
-  border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
-  color: var(--peek-text-secondary);
-  margin: 0.75em 0;
-}
-.peek-table-wrapper {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-.peek-table-wrapper::-webkit-scrollbar {
-  height: 4px;
-}
-.peek-table-wrapper::-webkit-scrollbar-track {
-  background: transparent;
-}
-.peek-table-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-.peek-table-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.peek-exchange-assistant table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  margin: 0; 
-  font-size: 13px; 
-  table-layout: auto;
-}
-.peek-exchange-assistant th, .peek-exchange-assistant td { padding: 6px 10px; border: 1px solid var(--peek-border); }
-.peek-exchange-assistant th { background: rgba(255,255,255,0.04); font-weight: 600; }
-
-/* Exchange navigation bar */
-.peek-exchange-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 6px 16px 8px;
-  border-top: 1px solid var(--peek-border);
-}
-
-.peek-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--peek-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+  background: currentColor;
+  vertical-align: middle;
   flex-shrink: 0;
 }
 
-.peek-nav-btn:hover:not(:disabled) {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.peek-nav-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
-.peek-exchange-counter {
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 36px;
-  text-align: center;
-  letter-spacing: 0.03em;
-}
-
-/* Status bar breadcrumb */
-.peek-exchange-breadcrumb {
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  padding: 1px 7px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Copy response button */
-.peek-copy-response-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 3px 8px;
-  border: 1px solid var(--peek-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  user-select: none;
-  align-self: flex-start;
-  width: max-content;
-}
-
-.peek-copy-response-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-/* Code block with header */
-.peek-code-block-wrapper {
-  margin: 0.75em 0;
-  border-radius: var(--peek-radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--peek-border);
-}
-
-.peek-code-block-header {
+.peek-toast {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid var(--peek-border);
+  gap: var(--peek-space-1);
+  padding: 2px var(--peek-space-2);
+  border-radius: var(--peek-radius-xs);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
 }
 
-.peek-code-lang {
-  font-family: var(--peek-font-mono);
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  text-transform: lowercase;
+.peek-toast--success {
+  color: var(--peek-success);
+  background: var(--peek-success-soft);
 }
 
-.peek-code-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease;
-  user-select: none;
+.peek-toast--error {
+  color: var(--peek-error);
+  background: var(--peek-error-soft);
 }
 
-.peek-code-copy-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
+/* ═══ Transcript ════════════════════════════════════════════════════════ */
+
+/*
+ * The scroller. An explicit max-height (rather than flex:1) is essential: the
+ * surface must still shrink to fit a short conversation, but must never grow
+ * past what the window clamp allows — .peek-surface is overflow:hidden, so an
+ * unbounded transcript would clip rather than scroll.
+ */
+.peek-transcript {
+  max-height: var(--peek-transcript-max);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--peek-space-3) var(--peek-space-4) var(--peek-space-1);
+  outline: none;
 }
 
-.peek-code-block-wrapper .peek-code-block {
-  border: none;
-  border-radius: 0;
-  margin: 0;
+.peek-transcript-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
-
-
-/* Exchange = one user+assistant pair */
+/* One user + assistant pair. */
 .peek-thread-exchange {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--peek-border);
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-3) 0;
+  border-bottom: 1px solid var(--peek-divider);
+  animation: peek-fade-in 0.18s ease-out;
 }
 
-.peek-thread-exchange:first-child {
-  border-top: 1px solid var(--peek-border);
+.peek-thread-exchange:last-child {
+  border-bottom: none;
 }
 
-/* User message bubble */
 .peek-thread-user {
   display: flex;
   flex-direction: column;
@@ -560,17 +1173,17 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--peek-space-1);
   margin-bottom: 6px;
 }
 
 .peek-user-context-chip {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--peek-surface-2);
   border: 1px solid var(--peek-border);
   color: var(--peek-text-muted);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 6px;
+  font-size: var(--peek-text-xs);
+  padding: 3px var(--peek-space-2);
+  border-radius: var(--peek-radius-sm);
   max-width: 250px;
   white-space: nowrap;
   overflow: hidden;
@@ -584,87 +1197,196 @@ html, body, #root {
 }
 
 .peek-user-context-chip.peek-clickable:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--peek-surface-3);
   color: var(--peek-text-secondary);
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--peek-border-strong);
   transform: translateY(-0.5px);
 }
 
 .peek-user-context-chip.peek-clickable:active {
   transform: translateY(0.5px);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--peek-active);
 }
 
 .peek-thread-user-bubble {
-  background: rgba(129, 140, 248, 0.12);
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  background: var(--peek-accent-dim);
+  border: 1px solid var(--peek-accent-line);
   color: var(--peek-text);
-  font-size: 13.5px;
-  line-height: 1.55;
-  padding: 7px 12px;
-  border-radius: 14px 14px 4px 14px;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading);
+  padding: 7px var(--peek-space-3);
+  border-radius: var(--peek-radius-lg) var(--peek-radius-lg) var(--peek-radius-xs) var(--peek-radius-lg);
   max-width: 85%;
   word-break: break-word;
   user-select: text;
+  white-space: pre-wrap;
 }
 
-/* Assistant message */
 .peek-thread-assistant {
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading-relaxed);
   color: var(--peek-text);
   user-select: text;
   padding-left: 2px;
   position: relative;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
-/* Markdown in thread */
-.peek-thread-assistant p { margin-bottom: 0.75em; }
-.peek-thread-assistant p:last-child { margin-bottom: 0; }
-.peek-thread-assistant h1, .peek-thread-assistant h2, .peek-thread-assistant h3 {
-  font-weight: 600; margin: 1em 0 0.5em; color: var(--peek-text);
+/* Attached images on a user turn. */
+.peek-turn-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 6px;
 }
-.peek-thread-assistant h1 { font-size: 1.25em; }
-.peek-thread-assistant h2 { font-size: 1.1em; }
-.peek-thread-assistant h3 { font-size: 1em; }
-.peek-thread-assistant strong { font-weight: 600; color: var(--peek-text); }
-.peek-thread-assistant em { font-style: italic; color: var(--peek-text-secondary); }
-.peek-thread-assistant ul, .peek-thread-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
-.peek-thread-assistant li { margin-bottom: 0.3em; }
-.peek-thread-assistant blockquote {
+
+.peek-turn-image {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--peek-radius-sm);
+  border: 1px solid var(--peek-border);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.peek-turn-image:hover {
+  border-color: var(--peek-border-strong);
+  transform: translateY(-1px);
+}
+
+/* Copy / remember / model row beneath an answer. */
+.peek-turn-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--peek-space-2);
+}
+
+.peek-turn-actions-spacer {
+  flex: 1;
+}
+
+.peek-turn-model {
+  font-size: var(--peek-text-xs);
+  color: var(--peek-text-muted);
+  background: var(--peek-badge-bg);
+  border-radius: var(--peek-radius-xs);
+  padding: 2px 6px;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Jump-to-bottom affordance. */
+.peek-scroll-bottom-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: var(--peek-space-2);
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--peek-border-strong);
+  background: var(--peek-elevated);
+  box-shadow: var(--peek-shadow-pop);
+  backdrop-filter: var(--peek-backdrop);
+  -webkit-backdrop-filter: var(--peek-backdrop);
+}
+
+.peek-scroll-bottom-btn:hover:not(:disabled) {
+  background: var(--peek-elevated-hover);
+}
+
+/* ═══ Markdown ══════════════════════════════════════════════════════════
+ *
+ * Rendered assistant content. Applied via `.peek-md` on the answer container,
+ * so the same rules cover the transcript and anything else that renders
+ * markdown later.
+ */
+
+.peek-md p { margin-bottom: 0.75em; }
+
+.peek-md p:last-child { margin-bottom: 0; }
+
+.peek-md h1, .peek-md h2, .peek-md h3 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  color: var(--peek-text);
+}
+
+.peek-md h1 { font-size: 1.25em; }
+.peek-md h2 { font-size: 1.1em; }
+.peek-md h3 { font-size: 1em; }
+
+.peek-md strong { font-weight: 600; color: var(--peek-text); }
+
+.peek-md em { font-style: italic; color: var(--peek-text-secondary); }
+
+.peek-md ul, .peek-md ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.peek-md li { margin-bottom: 0.3em; }
+
+.peek-md blockquote {
   border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
+  padding-left: var(--peek-space-3);
   color: var(--peek-text-secondary);
   margin: 0.75em 0;
 }
 
-/* Copy response button */
-.peek-copy-response-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 3px 8px;
+.peek-md table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: var(--peek-text-base);
+  table-layout: auto;
+}
+
+.peek-md th, .peek-md td {
+  padding: 6px var(--peek-space-2);
   border: 1px solid var(--peek-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  user-select: none;
-  align-self: flex-start;
-  width: max-content;
+  text-align: left;
 }
 
-.peek-copy-response-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
+.peek-md th {
+  background: var(--peek-badge-bg);
+  font-weight: 600;
 }
 
-/* Code block with header */
+/* Inline code */
+.peek-inline-code {
+  font-family: var(--peek-font-mono);
+  font-size: 0.88em;
+  background: var(--peek-code-bg);
+  padding: 1px 6px;
+  border-radius: var(--peek-radius-xs);
+  color: var(--peek-accent);
+}
+
+/* Code blocks */
+.peek-code-block {
+  background: var(--peek-code-block-bg);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  padding: var(--peek-space-3) var(--peek-space-3);
+  margin: 0.75em 0;
+  overflow-x: auto;
+}
+
+.peek-code-block code {
+  font-family: var(--peek-font-mono);
+  font-size: var(--peek-text-sm);
+  line-height: 1.6;
+  color: var(--peek-text-secondary);
+}
+
 .peek-code-block-wrapper {
   margin: 0.75em 0;
   border-radius: var(--peek-radius-sm);
@@ -676,150 +1398,35 @@ html, body, #root {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: 5px var(--peek-space-2);
+  background: var(--peek-code-header-bg);
   border-bottom: 1px solid var(--peek-border);
 }
 
 .peek-code-lang {
   font-family: var(--peek-font-mono);
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
   text-transform: lowercase;
 }
 
 .peek-code-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding: 2px 7px;
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease;
-  user-select: none;
+  border-radius: var(--peek-radius-xs);
 }
 
-.peek-code-copy-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-}
-
-/* Override the standalone code block (used inside wrapper) */
+/* Inside a wrapper the block supplies its own border and radius. */
 .peek-code-block-wrapper .peek-code-block {
   border: none;
   border-radius: 0;
   margin: 0;
 }
 
-
-
-
-.peek-response-content {
-  font-size: 13.5px;
-  line-height: 1.65;
-  color: var(--peek-text);
-  user-select: text;
-}
-
-/* Markdown styling */
-.peek-response-content p {
-  margin-bottom: 0.75em;
-}
-
-.peek-response-content p:last-child {
-  margin-bottom: 0;
-}
-
-.peek-response-content h1,
-.peek-response-content h2,
-.peek-response-content h3 {
-  font-weight: 600;
-  margin: 1em 0 0.5em;
-  color: var(--peek-text);
-}
-
-.peek-response-content h1 { font-size: 1.25em; }
-.peek-response-content h2 { font-size: 1.1em; }
-.peek-response-content h3 { font-size: 1em; }
-
-.peek-response-content strong {
-  font-weight: 600;
-  color: var(--peek-text);
-}
-
-.peek-response-content em {
-  font-style: italic;
-  color: var(--peek-text-secondary);
-}
-
-.peek-response-content ul,
-.peek-response-content ol {
-  padding-left: 1.5em;
-  margin-bottom: 0.75em;
-}
-
-.peek-response-content li {
-  margin-bottom: 0.3em;
-}
-
-.peek-response-content blockquote {
-  border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
-  color: var(--peek-text-secondary);
-  margin: 0.75em 0;
-}
-
-.peek-response-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.75em 0;
-  font-size: 13px;
-}
-
-.peek-response-content th,
-.peek-response-content td {
-  padding: 6px 10px;
-  border: 1px solid var(--peek-border);
-  text-align: left;
-}
-
-.peek-response-content th {
-  background: rgba(255, 255, 255, 0.04);
-  font-weight: 600;
-}
-
-/* Inline code */
-.peek-inline-code {
-  font-family: var(--peek-font-mono);
-  font-size: 0.88em;
-  background: var(--peek-code-bg);
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: var(--peek-accent);
-}
-
-/* Code blocks */
-.peek-code-block {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--peek-border);
-  border-radius: var(--peek-radius-sm);
-  padding: 12px 14px;
-  margin: 0.75em 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-.peek-code-block code {
-  font-family: var(--peek-font-mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--peek-text-secondary);
+.peek-copy-response-btn {
+  margin-top: var(--peek-space-2);
+  padding: 3px var(--peek-space-2);
+  align-self: flex-start;
+  width: max-content;
 }
 
 /* Links */
@@ -834,23 +1441,30 @@ html, body, #root {
   border-bottom-color: var(--peek-accent);
 }
 
-/* Streaming cursor */
-.peek-cursor {
+/*
+ * Streaming caret.
+ *
+ * Attached to the last rendered block rather than being its own element, so it
+ * trails the final line of text instead of dropping onto a line of its own.
+ */
+.peek-thread-assistant[data-live='true'] > :last-child::after {
+  content: '';
   display: inline-block;
   width: 2px;
-  height: 1em;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 1px;
   background: var(--peek-accent);
-  margin-left: 2px;
-  animation: peek-blink 1s steps(2) infinite;
   vertical-align: text-bottom;
+  animation: peek-blink 1.15s ease-in-out infinite;
 }
 
-/* Model loading indicator */
+/* Waiting-for-first-token indicator */
 .peek-loading-dots {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 2px;
+  padding: var(--peek-space-1) 2px;
 }
 
 .peek-loading-dots span {
@@ -863,50 +1477,124 @@ html, body, #root {
   animation: peek-dot-pulse 1.2s ease-in-out infinite;
 }
 
-.peek-loading-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
+.peek-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.peek-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
 
-.peek-loading-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
+/* ═══ Overlay Panels ════════════════════════════════════════════════════ */
 
-@keyframes peek-dot-pulse {
-  0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
-  40%           { opacity: 1;   transform: scale(1.1); }
-}
-
-/* ─── History Panel ─────────────────────────────────────────────────── */
-
+/*
+ * Shared by History, Models, Legend and the Memory overlay.
+ *
+ * Fills the content area, which excludes the footer — the action bar is a
+ * sibling of this stacking context, not inside it, so it stays visible and
+ * clickable while a panel is up.
+ *
+ * The background is fully opaque. The surface beneath is translucent over the
+ * live desktop, and a translucent panel on top of it let the wallpaper and
+ * taskbar read straight through the panel content.
+ */
 .peek-history {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--peek-bg);
+  background: var(--peek-panel-bg);
   min-height: 200px;
   z-index: 10;
-  border-radius: var(--peek-radius);
+  border-radius: var(--peek-radius-lg);
   overflow: hidden;
 }
 
+/*
+ * Panel header. Carries an accent-tinted glyph, a live count and the key that
+ * closes it — the old version was an uppercase grey string and a bare ×, which
+ * gave four different panels the same anonymous face.
+ */
 .peek-history-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
+  gap: var(--peek-space-2);
+  flex-shrink: 0;
+  padding: var(--peek-space-3) var(--peek-space-3);
   border-bottom: 1px solid var(--peek-border);
+  background: linear-gradient(
+    to bottom,
+    rgba(var(--peek-tint-rgb), 0.035),
+    transparent
+  );
+}
+
+.peek-panel-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-accent-soft);
+  color: var(--peek-accent);
 }
 
 .peek-history-title {
-  font-size: 13px;
+  font-size: var(--peek-text-md);
   font-weight: 600;
+  color: var(--peek-text);
+  letter-spacing: 0.01em;
+}
+
+.peek-panel-count {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--peek-badge-bg);
+  color: var(--peek-text-muted);
+  font-size: var(--peek-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-panel-spacer {
+  flex: 1;
+}
+
+.peek-panel-esc {
+  flex-shrink: 0;
+  font-size: 10px;
+  color: var(--peek-text-muted);
+}
+
+/* Richer empty states — the panels each showed one grey sentence. */
+.peek-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-6) var(--peek-space-5);
+  text-align: center;
+}
+
+.peek-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  margin-bottom: 2px;
+  border-radius: var(--peek-radius-md);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-muted);
+}
+
+.peek-empty-title {
+  font-size: var(--peek-text-base);
+  font-weight: 500;
   color: var(--peek-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+}
+
+.peek-empty-hint {
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+  max-width: 320px;
 }
 
 .peek-kbd {
@@ -915,9 +1603,9 @@ html, body, #root {
   justify-content: center;
   height: 20px;
   padding: 0 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-kbd-bg);
+  border: 1px solid var(--peek-border);
   color: var(--peek-text-muted);
   font-family: var(--peek-font);
   font-size: 10px;
@@ -925,19 +1613,19 @@ html, body, #root {
 }
 
 .peek-history-search {
-  padding: 8px 16px;
+  padding: var(--peek-space-2) var(--peek-space-4);
   border-bottom: 1px solid var(--peek-border);
 }
 
 .peek-history-search input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--peek-input-bg);
   border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  padding: 6px 10px;
+  border-radius: var(--peek-radius-xs);
+  padding: 6px var(--peek-space-2);
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 12px;
+  font-size: var(--peek-text-sm);
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -949,34 +1637,52 @@ html, body, #root {
 .peek-history-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-.peek-history-empty {
-  padding: 24px 16px;
-  text-align: center;
-  color: var(--peek-text-muted);
-  font-size: 13px;
+  padding: var(--peek-space-1);
 }
 
 .peek-history-item {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--peek-space-2) var(--peek-space-3);
   border: none;
   background: transparent;
   border-radius: var(--peek-radius-sm);
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s ease;
+  transition: background 0.12s ease;
   position: relative;
 }
 
-.peek-history-item:hover {
+/* A short accent rule that grows in on hover, so the row you're about to
+   commit to is obvious without the list turning into a grid of boxes. */
+.peek-history-item::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--peek-accent);
+  transform: translateY(-50%);
+  transition: height 0.16s ease;
+}
+
+.peek-history-item:hover::before,
+.peek-history-item:focus-visible::before,
+.peek-history-item[data-active='true']::before {
+  height: 58%;
+}
+
+.peek-history-item:hover,
+.peek-history-item:focus-visible {
   background: var(--peek-hover);
+  outline: none;
+}
+
+.peek-history-item[data-active='true'] {
+  background: var(--peek-accent-soft);
 }
 
 .peek-history-item-top {
@@ -984,11 +1690,11 @@ html, body, #root {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: var(--peek-space-1);
 }
 
 .peek-history-item-title {
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   font-weight: 500;
   color: var(--peek-text);
   overflow: hidden;
@@ -999,94 +1705,850 @@ html, body, #root {
 
 .peek-history-item-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--peek-space-1);
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.peek-history-item:hover .peek-history-item-actions {
+.peek-history-item:hover .peek-history-item-actions,
+.peek-history-item:focus-within .peek-history-item-actions {
   opacity: 1;
 }
 
 .peek-history-action-btn {
-  background: transparent;
-  border: 1px solid var(--peek-border);
-  color: var(--peek-text-muted);
+  border-color: var(--peek-border);
   width: 22px;
   height: 22px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.1s ease;
-}
-
-.peek-history-action-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--peek-radius-xs);
 }
 
 .peek-history-edit-input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--peek-input-bg-hi);
   border: 1px solid var(--peek-border-focus);
-  border-radius: 4px;
+  border-radius: var(--peek-radius-xs);
   padding: 2px 6px;
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   font-weight: 500;
   outline: none;
 }
 
 .peek-history-item-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--peek-space-2);
   align-items: center;
 }
 
-.peek-history-item-model {
-  font-size: 11px;
+.peek-history-item-model,
+.peek-history-item-time {
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
+}
+
+/* ═══ Settings Window ═══════════════════════════════════════════════════ */
+
+.peek-settings {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: var(--peek-bg-solid);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  user-select: none;
+}
+
+.peek-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  width: 172px;
+  padding: var(--peek-space-4) var(--peek-space-2);
+  border-right: 1px solid var(--peek-border);
+  overflow-y: auto;
+}
+
+.peek-settings-brand {
+  padding: 0 var(--peek-space-2) var(--peek-space-3);
+  font-size: var(--peek-text-base);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.peek-settings-navbtn {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  width: 100%;
+  padding: 7px var(--peek-space-2);
+  border: none;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.peek-settings-navbtn:hover {
+  background: var(--peek-hover);
+  color: var(--peek-text);
+}
+
+.peek-settings-navbtn[aria-current='page'] {
+  background: var(--peek-accent-soft);
+  color: var(--peek-accent);
   font-weight: 500;
 }
 
-.peek-history-item-time {
-  font-size: 11px;
+.peek-settings-body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--peek-space-5) var(--peek-space-5) var(--peek-space-6);
+}
+
+.peek-settings-h2 {
+  font-size: var(--peek-text-xl);
+  font-weight: 600;
+  margin-bottom: var(--peek-space-1);
+}
+
+.peek-settings-intro {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+  margin-bottom: var(--peek-space-4);
+}
+
+.peek-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-4);
+  padding: var(--peek-space-4);
+  margin-bottom: var(--peek-space-4);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-md);
+  background: var(--peek-surface-1);
+}
+
+.peek-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peek-space-4);
+}
+
+.peek-settings-rowtext {
+  min-width: 0;
+}
+
+.peek-settings-label {
+  display: block;
+  font-size: var(--peek-text-md);
+}
+
+.peek-settings-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+}
+
+.peek-settings-divider {
+  height: 1px;
+  background: var(--peek-border);
+}
+
+/* Segmented control (theme mode, retention). */
+.peek-segmented {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-input-bg);
+}
+
+.peek-segmented button {
+  padding: 4px var(--peek-space-3);
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.peek-segmented button:hover {
+  color: var(--peek-text);
+}
+
+.peek-segmented button[aria-pressed='true'] {
+  background: var(--peek-accent);
+  color: var(--peek-accent-contrast);
+  font-weight: 500;
+}
+
+/* Accent swatches.
+   Each button carries its own data-accent (and data-appearance), so the
+   [data-accent] blocks at the top of this file set that accent's channel on
+   the swatch itself — it paints its own colour with no extra literals. */
+.peek-swatches {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.peek-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--peek-border-strong);
+  border-radius: 50%;
+  background: rgb(var(--peek-accent-rgb));
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.peek-swatch:hover {
+  transform: scale(1.12);
+}
+
+.peek-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--peek-bg-solid), 0 0 0 4px var(--peek-text);
+}
+
+.peek-swatch:focus-visible {
+  outline: 2px solid var(--peek-text);
+  outline-offset: 3px;
+}
+
+/* Theme picker */
+
+.peek-theme-family {
+  margin-top: var(--peek-space-3);
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--peek-text-muted);
 }
 
-/* ─── Animations ────────────────────────────────────────────────────── */
+.peek-theme-family:first-child {
+  margin-top: 0;
+}
+
+.peek-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: var(--peek-space-2);
+  margin-top: 6px;
+}
+
+/*
+ * Each card carries the theme it represents, so it renders a live preview of
+ * that palette rather than a swatch someone has to keep in sync by hand.
+ */
+.peek-theme-card {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-2);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: rgb(var(--peek-base-rgb));
+  color: rgb(var(--peek-fg-rgb));
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, transform 0.12s ease;
+}
+
+.peek-theme-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(var(--peek-fg-rgb), 0.35);
+}
+
+.peek-theme-card[aria-pressed='true'] {
+  border-color: rgb(var(--peek-accent-rgb));
+  box-shadow: 0 0 0 1px rgb(var(--peek-accent-rgb));
+}
+
+.peek-theme-card:focus-visible {
+  outline: 2px solid rgb(var(--peek-accent-rgb));
+  outline-offset: 2px;
+}
+
+.peek-theme-dots {
+  display: inline-flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.peek-theme-dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.peek-theme-dots i:nth-child(1) { background: rgb(var(--peek-accent-rgb)); }
+.peek-theme-dots i:nth-child(2) { background: rgb(var(--peek-success-rgb)); }
+.peek-theme-dots i:nth-child(3) { background: rgb(var(--peek-error-rgb)); }
+
+.peek-theme-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Provider picker pills. */
+.peek-provider-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.peek-provider-pill {
+  padding: 4px var(--peek-space-3);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-provider-pill:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+}
+
+/* Selected but not yet verified — a draft. */
+.peek-provider-pill[aria-pressed='true'] {
+  background: var(--peek-accent-soft);
+  border-color: var(--peek-accent);
+  color: var(--peek-accent);
+}
+
+/* The provider actually in use. */
+.peek-provider-pill[data-active='true'] {
+  background: var(--peek-success-soft);
+  border-color: var(--peek-success-line);
+  color: var(--peek-success);
+}
+
+.peek-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peek-space-3);
+  padding: var(--peek-space-2) var(--peek-space-3);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-input-bg);
+}
+
+.peek-profile-row[data-active='true'] {
+  border-color: var(--peek-success-line);
+  background: var(--peek-success-soft);
+}
+
+/* ═══ Setup Wizard ══════════════════════════════════════════════════════ */
+
+.peek-link-btn {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--peek-accent);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-sm);
+  cursor: pointer;
+}
+
+.peek-link-btn:hover {
+  text-decoration: underline;
+}
+
+.peek-wizard {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--peek-space-6) var(--peek-space-6) var(--peek-space-6);
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--peek-bg-solid);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+}
+
+.peek-wizard-inner {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-4);
+}
+
+.peek-wizard-progress {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: var(--peek-space-2);
+}
+
+.peek-wizard-pip {
+  width: 22px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--peek-surface-3);
+  transition: background 0.2s ease;
+}
+
+.peek-wizard-pip--done { background: var(--peek-accent-line-strong); }
+.peek-wizard-pip--current { background: var(--peek-accent); }
+
+.peek-wizard-title {
+  font-size: var(--peek-text-xl);
+  font-weight: 700;
+  text-align: center;
+}
+
+.peek-wizard-subtitle {
+  font-size: var(--peek-text-md);
+  color: var(--peek-text-muted);
+  text-align: center;
+  line-height: var(--peek-leading);
+}
+
+.peek-wizard-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-2);
+}
+
+.peek-provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: var(--peek-space-3) var(--peek-space-4);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-md);
+  background: var(--peek-surface-1);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.peek-provider-card:hover {
+  border-color: var(--peek-border-strong);
+  background: var(--peek-surface-2);
+}
+
+.peek-provider-card:focus-visible {
+  outline: none;
+  border-color: var(--peek-accent);
+}
+
+.peek-provider-card[aria-pressed='true'] {
+  border-color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+}
+
+.peek-provider-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+}
+
+.peek-provider-card-title {
+  font-size: var(--peek-text-lg);
+  font-weight: 600;
+}
+
+.peek-provider-card-desc {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+}
+
+.peek-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-muted);
+}
+
+.peek-badge--success { background: var(--peek-success-soft); color: var(--peek-success); }
+.peek-badge--info { background: var(--peek-accent-soft); color: var(--peek-accent); }
+
+.peek-wizard-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading);
+}
+
+.peek-wizard-actions {
+  display: flex;
+  gap: var(--peek-space-2);
+  align-items: center;
+  margin-top: var(--peek-space-2);
+}
+
+.peek-wizard-skip {
+  border: none;
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-sm);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.peek-wizard-skip:hover { color: var(--peek-text-secondary); }
+
+.peek-wizard-modellist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-1);
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  padding: var(--peek-space-1);
+}
+
+.peek-wizard-model {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  width: 100%;
+  padding: var(--peek-space-2) var(--peek-space-3);
+  border: none;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  text-align: left;
+  cursor: pointer;
+}
+
+.peek-wizard-model:hover { background: var(--peek-hover); }
+
+.peek-wizard-model[aria-pressed='true'] {
+  background: var(--peek-accent-soft);
+  color: var(--peek-accent);
+}
+
+.peek-wizard-done {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--peek-space-3);
+  text-align: center;
+}
+
+.peek-wizard-keys {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--peek-space-3) var(--peek-space-4);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-md);
+  background: var(--peek-surface-1);
+}
+
+.peek-wizard-keys .peek-kbd {
+  height: 26px;
+  font-size: var(--peek-text-base);
+  padding: 0 var(--peek-space-2);
+}
+
+/* ═══ Footer Action Bar ═════════════════════════════════════════════════ */
+
+.peek-footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: var(--peek-footer-h);
+  padding: 0 6px;
+  border-top: 1px solid var(--peek-border);
+  /* Above .peek-history (z-index 10) so the bar stays usable while a panel is
+     open — the panels stop short of it, see .peek-history's bottom offset. */
+  position: relative;
+  z-index: 11;
+}
+
+.peek-footer-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+/* Pressed state for the panel toggles. */
+.peek-icon-btn[aria-pressed='true'] {
+  color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+}
+
+/* Takes the slack, so the trailing controls sit hard right. */
+.peek-footer-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--peek-space-2);
+  overflow: hidden;
+}
+
+.peek-footer-statustext {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.peek-footer-statustext:not(:disabled) {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.12s ease, background 0.12s ease;
+}
+
+.peek-footer-statustext:not(:disabled):hover {
+  background: var(--peek-hover);
+  text-decoration-color: currentColor;
+}
+
+.peek-tone-ok { color: var(--peek-success); }
+.peek-tone-warn { color: var(--peek-warning); }
+.peek-tone-error { color: var(--peek-error); }
+.peek-tone-muted { color: var(--peek-text-muted); }
+
+.peek-footer-model {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 190px;
+  padding: 3px var(--peek-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-badge-bg);
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-footer-model:hover {
+  color: var(--peek-text);
+  background: var(--peek-surface-3);
+}
+
+.peek-footer-model:focus-visible {
+  outline: none;
+  border-color: var(--peek-accent);
+}
+
+/* No model configured is the most likely fresh-install state and used to be
+   the least signposted — give it the accent so it reads as the next step. */
+.peek-footer-model--empty {
+  color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+  border-color: var(--peek-accent-line);
+}
+
+/* ═══ First-run hint ════════════════════════════════════════════════════ */
+
+.peek-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-2) var(--peek-space-4) var(--peek-space-3);
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+}
+
+.peek-hint-items {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-3);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.peek-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.peek-hint-dismiss {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  cursor: pointer;
+}
+
+.peek-hint-dismiss:hover {
+  color: var(--peek-text);
+  background: var(--peek-hover);
+}
+
+/* ═══ Legend ════════════════════════════════════════════════════════════ */
+
+.peek-legend-group {
+  padding: var(--peek-space-3) var(--peek-space-3) var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--peek-text-muted);
+}
+
+.peek-legend-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--peek-space-3);
+  padding: 6px var(--peek-space-3);
+}
+
+.peek-legend-desc {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+}
+
+.peek-legend-row .peek-kbd {
+  flex-shrink: 0;
+  font-size: var(--peek-text-xs);
+  padding: 3px 6px;
+  height: auto;
+  background: var(--peek-surface-2);
+}
+
+/* ═══ Model List ════════════════════════════════════════════════════════ */
+
+.peek-model-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--peek-space-2);
+}
+
+.peek-model-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px var(--peek-space-1);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-muted);
+}
+
+.peek-model-badge--vision {
+  background: var(--peek-success-soft);
+  color: var(--peek-success);
+}
+
+.peek-model-meta {
+  display: flex;
+  gap: var(--peek-space-2);
+  margin-top: var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  font-weight: 400;
+  color: var(--peek-text-muted);
+}
+
+.peek-model-active {
+  flex-shrink: 0;
+  font-size: var(--peek-text-sm);
+  font-weight: 500;
+  color: var(--peek-success);
+}
+
+/* ═══ Animations ════════════════════════════════════════════════════════ */
 
 @keyframes peek-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
 }
 
+/* Eased rather than steps(): a hard on/off flicker is what read as harsh. */
 @keyframes peek-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%, 30% { opacity: 1; }
+  50% { opacity: 0.12; }
+  70%, 100% { opacity: 1; }
 }
 
 @keyframes peek-dot-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.3;
-  }
+  0%, 100% { transform: scale(0.72); opacity: 0.35; }
+  50% { transform: scale(1); opacity: 1; }
 }
 
-/* ─── Reduced Motion ────────────────────────────────────────────────── */
+@keyframes peek-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ═══ Reduced Motion ════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {
-  .peek-streaming-dot,
-  .peek-bg-dot,
-  .peek-cursor {
+  .peek-thread-assistant[data-live='true'] > :last-child::after,
+  .peek-loading-dots span,
+  .peek-thread-exchange {
     animation: none;
   }
 }

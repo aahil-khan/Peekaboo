@@ -34,18 +34,45 @@ export const responseVariants: Variants = {
   },
 };
 
+/**
+ * Overlay panels (History, Models, Legend, Memories).
+ *
+ * These used to slide in from the left on a flat easeOut, which read as a
+ * cheap sheet rather than something surfacing. Now they rise and settle on a
+ * spring, and their rows cascade in behind the header — see panelRowVariants.
+ */
 export const historyVariants: Variants = {
-  hidden: { opacity: 0, x: -20 },
+  hidden: { opacity: 0, y: 12, scale: 0.985 },
   visible: {
     opacity: 1,
-    x: 0,
-    transition: { duration: 0.2, ease: 'easeOut' },
+    y: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 520,
+      damping: 34,
+      mass: 0.7,
+      staggerChildren: 0.022,
+      delayChildren: 0.03,
+    },
   },
   exit: {
     opacity: 0,
-    x: -20,
-    transition: { duration: 0.2, ease: 'easeIn' },
+    y: 8,
+    scale: 0.99,
+    transition: { duration: 0.11, ease: 'easeIn' },
   },
+};
+
+/** Rows inside a panel. Inherits the stagger from historyVariants. */
+export const panelRowVariants: Variants = {
+  hidden: { opacity: 0, y: 7 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { type: 'spring', stiffness: 600, damping: 38, mass: 0.6 },
+  },
+  exit: { opacity: 0, transition: { duration: 0.06 } },
 };
 
 export const chipVariants: Variants = {

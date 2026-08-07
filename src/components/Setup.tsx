@@ -1,198 +1,296 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from '../store/settings';
+import { usePluginsStore } from '../store/plugins';
 import { LlamaProfileEditor } from './LlamaProfileEditor';
+import { ProviderFields } from './ProviderFields';
+import {
+  BUILTIN_PROVIDERS,
+  listProviderModels,
+  providerLabel,
+  verifyProvider,
+  type ProviderInfo,
+} from '../lib/providerCatalog';
 
-type Step = 'provider' | 'llama-profile' | 'ollama-url';
+/**
+ * First-run wizard.
+ *
+ * The previous version offered only the two local backends, never tested the
+ * configuration, and ended by closing its own window — leaving the user staring
+ * at their desktop with no indication that Peekaboo was running or how to
+ * summon it. All three are fixed here: every provider is offered, the
+ * connection is checked before you can continue, a model is chosen up front,
+ * and the last screen is the hotkey.
+ */
+
+type Step = 'provider' | 'configure' | 'model' | 'done';
+
+const STEP_ORDER: Step[] = ['provider', 'configure', 'model', 'done'];
+
+interface ModelChoice {
+  name: string;
+  isVision?: boolean;
+  parameterSize?: string;
+}
 
 export const Setup: React.FC = () => {
-  const { setSetupCompleted, setActiveProvider, ollamaBaseUrl, setOllamaBaseUrl } = useSettingsStore();
-  const [step, setStep] = useState<Step>('provider');
+  const {
+    setSetupCompleted,
+    activeProvider,
+    setActiveProvider,
+    activeModel,
+    setActiveModel,
+  } = useSettingsStore();
+  const { manifests, refreshManifests } = usePluginsStore();
 
-  const finish = async () => {
+  const [step, setStep] = useState<Step>('provider');
+  const [chosen, setChosen] = useState<string>(activeProvider || 'ollama');
+
+  const [verifying, setVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifyNote, setVerifyNote] = useState<string | null>(null);
+
+  const [models, setModels] = useState<ModelChoice[] | null>(null);
+  const [modelsError, setModelsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    refreshManifests().catch(() => {});
+  }, [refreshManifests]);
+
+  const modelPlugins = manifests.filter((m) => m.plugin.type === 'model');
+  const providers: ProviderInfo[] = [
+    ...BUILTIN_PROVIDERS,
+    ...modelPlugins.map((mp) => ({
+      id: mp.plugin.id,
+      label: mp.plugin.name,
+      kind: 'plugin' as const,
+      blurb: 'Provided by an installed plugin.',
+    })),
+  ];
+
+  const finish = useCallback(async () => {
     setSetupCompleted(true);
     try {
-      await invoke('update_settings', {
-        settings: { setup_completed: true },
-      });
-    } catch {}
+      await invoke('update_settings', { settings: { setup_completed: true } });
+    } catch (err) {
+      // Rust keeps its own copy of this flag; if the sync fails the hotkey will
+      // reopen setup, so surface it rather than swallowing it silently.
+      console.error('Failed to tell the backend setup is complete:', err);
+    }
     invoke('hide_setup_mode');
+  }, [setSetupCompleted]);
+
+  const chooseProvider = (id: string) => {
+    setChosen(id);
+    setActiveProvider(id);
+    setVerifyError(null);
+    setVerifyNote(null);
+    setStep('configure');
   };
 
-  const chooseOllama = () => {
-    setActiveProvider('ollama');
-    setStep('ollama-url');
+  const runVerification = async () => {
+    setVerifying(true);
+    setVerifyError(null);
+    setVerifyNote(null);
+    const result = await verifyProvider(chosen);
+    setVerifying(false);
+
+    if (!result.ok) {
+      setVerifyError(result.error ?? 'Could not connect.');
+      return;
+    }
+    setVerifyNote(result.note ?? null);
+
+    setModels(null);
+    setModelsError(null);
+    setStep('model');
+
+    try {
+      const found = await listProviderModels(chosen);
+      setModels(found);
+      // Pre-select so the step is a confirmation rather than a chore.
+      if (found.length > 0 && !found.some((m) => m.name === activeModel)) {
+        setActiveModel(found[0].name);
+      }
+    } catch (e: any) {
+      setModelsError(e?.message || 'Could not list models.');
+      setModels([]);
+    }
   };
 
-  const chooseLlama = () => {
-    setActiveProvider('llama');
-    setStep('llama-profile');
-  };
-
-  const finishOllama = () => finish();
-
-  const finishLlama = () => finish();
+  const stepIndex = STEP_ORDER.indexOf(step);
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: '#18181b',
-      color: '#fafafa',
-      fontFamily: 'Inter, -apple-system, system-ui, sans-serif',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      padding: '32px 32px 48px',
-      overflowY: 'auto',
-      overflowX: 'hidden',
-    }}>
-      {step === 'provider' && (
-        <div style={{ maxWidth: 640, width: '100%' }}>
-          <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>Welcome to Peekaboo</h1>
-          <p style={{ fontSize: 14, color: 'var(--peek-text-muted)', textAlign: 'center', marginBottom: 32 }}>
-            Choose your AI backend to get started.
-          </p>
-          <div style={{ display: 'flex', gap: 16 }}>
-            <ProviderCard
-              title="Ollama"
-              description="Already have Ollama running locally? Connect to it."
-              badge="Easy"
-              badgeColor="#4caf50"
-              onClick={chooseOllama}
+    <div className="peek-wizard">
+      <div className="peek-wizard-inner">
+        <div className="peek-wizard-progress" aria-label={`Step ${stepIndex + 1} of ${STEP_ORDER.length}`}>
+          {STEP_ORDER.map((s, i) => (
+            <span
+              key={s}
+              className={`peek-wizard-pip${i < stepIndex ? ' peek-wizard-pip--done' : i === stepIndex ? ' peek-wizard-pip--current' : ''}`}
             />
-            <ProviderCard
-              title="llama.cpp"
-              description="Run a GGUF model directly. Full control over context, GPU layers, and more."
-              badge="Advanced"
-              badgeColor="#ff9800"
-              onClick={chooseLlama}
-            />
-          </div>
-          <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', textAlign: 'center', marginTop: 24 }}>
-            You can change this later in Settings.
-          </p>
-          <div style={{ textAlign: 'center', marginTop: 16 }}>
-            <button onClick={finish} style={{ background: 'none', border: 'none', color: 'var(--peek-text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
-              Skip setup
+          ))}
+        </div>
+
+        {step === 'provider' && (
+          <>
+            <h1 className="peek-wizard-title">Welcome to Peekaboo</h1>
+            <p className="peek-wizard-subtitle">
+              Peekaboo needs somewhere to send your questions. Pick one — you can change it later.
+            </p>
+            <div className="peek-wizard-cards">
+              {providers.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  className="peek-provider-card"
+                  aria-pressed={chosen === p.id}
+                  onClick={() => chooseProvider(p.id)}
+                >
+                  <span className="peek-provider-card-head">
+                    <span className="peek-provider-card-title">{p.label}</span>
+                    <span
+                      className={`peek-badge ${
+                        p.kind === 'local' ? 'peek-badge--success' : p.kind === 'cloud' ? 'peek-badge--info' : ''
+                      }`}
+                    >
+                      {p.kind === 'local' ? 'On this machine' : p.kind === 'cloud' ? 'Cloud' : 'Plugin'}
+                    </span>
+                  </span>
+                  <span className="peek-provider-card-desc">{p.blurb}</span>
+                </button>
+              ))}
+            </div>
+            <div className="peek-wizard-actions">
+              <span style={{ flex: 1 }} />
+              <button className="peek-wizard-skip" onClick={finish}>
+                Skip for now — Peekaboo won't answer until a provider is set up
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'configure' && chosen === 'llama' && (
+          <>
+            <h1 className="peek-wizard-title">Set up llama.cpp</h1>
+            <p className="peek-wizard-subtitle">
+              Point Peekaboo at your llama.cpp build and a model file. You can add more later in Settings.
+            </p>
+            <LlamaProfileEditor onSave={() => setStep('done')} onCancel={() => setStep('provider')} cancelLabel="Back" />
+          </>
+        )}
+
+        {step === 'configure' && chosen !== 'llama' && (
+          <>
+            <h1 className="peek-wizard-title">Connect {providerLabel(chosen, providers.find((p) => p.id === chosen)?.label)}</h1>
+            <p className="peek-wizard-subtitle">{providers.find((p) => p.id === chosen)?.blurb}</p>
+
+            <ProviderFields provider={chosen} onChange={() => setVerifyError(null)} />
+
+            {verifyError && (
+              <div className="peek-wizard-result peek-tone-error">
+                <span aria-hidden="true">✕</span>
+                <span>{verifyError}</span>
+              </div>
+            )}
+
+            <div className="peek-wizard-actions">
+              <button className="peek-btn peek-btn--secondary" onClick={() => setStep('provider')}>
+                Back
+              </button>
+              <button
+                className="peek-btn peek-btn--primary"
+                style={{ flex: 1 }}
+                onClick={runVerification}
+                disabled={verifying}
+              >
+                {verifying ? 'Checking…' : 'Check connection'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'model' && (
+          <>
+            <h1 className="peek-wizard-title">Pick a model</h1>
+            <p className="peek-wizard-subtitle">
+              {models === null
+                ? 'Looking for available models…'
+                : models.length > 0
+                  ? 'This is what Peekaboo will use by default. Alt+M switches it any time.'
+                  : `Connected, but ${providerLabel(chosen)} reported no models.`}
+            </p>
+
+            {verifyNote && (
+              <div className="peek-wizard-result peek-tone-muted">
+                <span aria-hidden="true">•</span>
+                <span>{verifyNote}</span>
+              </div>
+            )}
+
+            {models !== null && models.length > 0 && (
+              <div className="peek-wizard-modellist">
+                {models.map((m) => (
+                  <button
+                    key={m.name}
+                    type="button"
+                    className="peek-wizard-model"
+                    aria-pressed={activeModel === m.name}
+                    onClick={() => setActiveModel(m.name)}
+                  >
+                    <span style={{ flex: 1 }}>{m.name}</span>
+                    {m.parameterSize && <span className="peek-form-hint">{m.parameterSize}</span>}
+                    {m.isVision && <span className="peek-badge peek-badge--success">Vision</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {models !== null && models.length === 0 && (
+              <div className="peek-wizard-result peek-tone-warn">
+                <span aria-hidden="true">!</span>
+                <span>
+                  {modelsError ??
+                    (chosen === 'ollama'
+                      ? 'Ollama is running but has no models yet. Pull one (for example `ollama pull llama3.2`), then reopen Settings.'
+                      : 'You can pick one later from the model switcher.')}
+                </span>
+              </div>
+            )}
+
+            <div className="peek-wizard-actions">
+              <button className="peek-btn peek-btn--secondary" onClick={() => setStep('configure')}>
+                Back
+              </button>
+              <button className="peek-btn peek-btn--primary" style={{ flex: 1 }} onClick={() => setStep('done')}>
+                Continue
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'done' && (
+          <div className="peek-wizard-done">
+            <h1 className="peek-wizard-title">You're set</h1>
+            <p className="peek-wizard-subtitle">
+              Peekaboo lives in your tray and stays out of the way until you call it.
+            </p>
+            <div className="peek-wizard-keys">
+              <kbd className="peek-kbd">Ctrl</kbd>
+              <span className="peek-form-hint">+</span>
+              <kbd className="peek-kbd">Space</kbd>
+            </div>
+            <p className="peek-wizard-subtitle">
+              Press that anywhere to summon it. <kbd className="peek-kbd">Alt</kbd>
+              <span className="peek-form-hint"> + </span>
+              <kbd className="peek-kbd">/</kbd> lists every shortcut.
+            </p>
+            <button className="peek-btn peek-btn--primary" onClick={finish}>
+              Start using Peekaboo
             </button>
           </div>
-        </div>
-      )}
-
-      {step === 'ollama-url' && (
-        <div style={{ maxWidth: 540, width: '100%' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Ollama Setup</h2>
-          <p style={{ fontSize: 13, color: 'var(--peek-text-muted)', marginBottom: 24 }}>
-            Enter your Ollama server URL.
-          </p>
-          <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)', display: 'block', marginBottom: 6 }}>
-            Base URL
-          </label>
-          <input
-            type="text"
-            value={ollamaBaseUrl}
-            onChange={(e) => setOllamaBaseUrl(e.target.value)}
-            style={inputStyle}
-          />
-          <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
-            <button onClick={() => setStep('provider')} style={secondaryBtnStyle}>Back</button>
-            <button onClick={finishOllama} style={primaryBtnStyle}>Finish</button>
-          </div>
-        </div>
-      )}
-
-      {step === 'llama-profile' && (
-        <div style={{ maxWidth: 680, width: '100%', marginTop: 'auto', marginBottom: 'auto', paddingTop: 16 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 4 }}>Add your first model</h2>
-          <p style={{ fontSize: 13, color: 'var(--peek-text-muted)', marginBottom: 20 }}>
-            Configure your GGUF model. You can add more profiles in Settings later.
-          </p>
-          <LlamaProfileEditor
-            onSave={finishLlama}
-            onCancel={() => setStep('provider')}
-            cancelLabel="Back"
-          />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
-};
-
-const ProviderCard: React.FC<{
-  title: string;
-  description: string;
-  badge: string;
-  badgeColor: string;
-  onClick: () => void;
-}> = ({ title, description, badge, badgeColor, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      flex: 1,
-      background: 'rgba(255,255,255,0.03)',
-      border: '1px solid var(--peek-border)',
-      borderRadius: 12,
-      padding: '20px 16px',
-      cursor: 'pointer',
-      color: 'var(--peek-text)',
-      fontFamily: 'var(--peek-font)',
-      textAlign: 'left',
-      transition: 'border-color 0.15s, background 0.15s',
-    }}
-    onMouseOver={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.2)';
-      (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.06)';
-    }}
-    onMouseOut={(e) => {
-      (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--peek-border)';
-      (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.03)';
-    }}
-  >
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-      <span style={{ fontSize: 16, fontWeight: 600 }}>{title}</span>
-      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: `${badgeColor}22`, color: badgeColor }}>
-        {badge}
-      </span>
-    </div>
-    <p style={{ fontSize: 13, color: 'var(--peek-text-muted)', lineHeight: 1.5, margin: 0 }}>{description}</p>
-  </button>
-);
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  background: 'rgba(0,0,0,0.2)',
-  border: '1px solid var(--peek-border)',
-  color: 'var(--peek-text)',
-  padding: '8px 12px',
-  borderRadius: 6,
-  fontSize: 14,
-  outline: 'none',
-  fontFamily: 'var(--peek-font-mono)',
-  boxSizing: 'border-box',
-};
-
-const primaryBtnStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '9px 0',
-  background: '#4caf50',
-  color: '#fff',
-  border: 'none',
-  borderRadius: 6,
-  fontSize: 14,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
-};
-
-const secondaryBtnStyle: React.CSSProperties = {
-  padding: '9px 20px',
-  background: 'rgba(255,255,255,0.05)',
-  color: 'var(--peek-text)',
-  border: '1px solid var(--peek-border)',
-  borderRadius: 6,
-  fontSize: 14,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
 };

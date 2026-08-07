@@ -5,7 +5,8 @@ import { listen } from '@tauri-apps/api/event';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 import { Input } from './Input';
-import { ExchangeView } from './ExchangeView';
+import { Transcript } from './Transcript';
+import { Footer, type FooterStatus } from './Footer';
 import { History } from './History';
 import { Models } from './Models';
 import { Legend } from './Legend';
@@ -16,7 +17,8 @@ import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
 import { useShortcuts } from '../hooks/useShortcuts';
-import { useAttachments } from '../hooks/useAttachments';
+import { togglePanel, closePanels } from '../hooks/usePanels';
+import { useAttachments, type Attachment } from '../hooks/useAttachments';
 import { registry } from '../lib/plugins/registry';
 import { usePluginsStore } from '../store/plugins';
 import { useLlamaServer } from '../hooks/useLlamaServer';
@@ -204,18 +206,43 @@ export const PeekSurface: React.FC = () => {
   useEffect(() => {
     if (!visible) return;
 
+    /*
+     * The observer fires on sub-pixel changes, and each call used to cost an
+     * IPC round-trip into Rust's set_size — during streaming that is once per
+     * animation frame, and the window visibly steps as it grows. Round to whole
+     * pixels, skip anything that doesn't actually change the height, and
+     * coalesce bursts into a single frame.
+     */
+    let lastHeight = -1;
+    let frame = 0;
+
     const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const height = Math.min(Math.max(entry.contentRect.height + 2, 80), 520);
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+
+      // Floor 86 = input 52 + footer 34, the height of an empty overlay, and
+      // the same value as tauri.conf.json's window height. Ceiling 520 pairs
+      // with .peek-surface's 518px cap and --peek-transcript-max; see the
+      // height-budget note in index.css before changing any of them.
+      const height = Math.min(Math.max(Math.round(entry.contentRect.height) + 2, 86), 520);
+      if (height === lastHeight) return;
+      lastHeight = height;
+
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
         invoke('resize_peek', { width: 660, height });
-      }
+      });
     });
 
     if (surfaceRef.current) {
       resizeObserver.observe(surfaceRef.current);
     }
 
-    return () => resizeObserver.disconnect();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
   }, [visible]);
 
   // ── Reset menus on blur/hide ──
@@ -236,10 +263,14 @@ export const PeekSurface: React.FC = () => {
     if (!query) return;
     
     if (!activeModel) {
-      setToast({ type: 'error', text: 'No model selected — check Settings or wait for server' });
+      setToast({ type: 'error', text: 'No model selected — pick one from the model button' });
       setTimeout(() => setToast(null), 3000);
       return;
     }
+
+    // Asking a question is proof the hint did its job; retire it so it doesn't
+    // reappear on every new chat.
+    useSettingsStore.getState().setOverlayTourSeen(true);
 
     const messageContent = buildMessageContent(query);
     const hasAttachments = attachments.length > 0;
@@ -374,9 +405,20 @@ export const PeekSurface: React.FC = () => {
 
   // ── Clear conversation ──
   const handleClear = useCallback(async () => {
+    // Nothing to clear means nothing happened — confirming a no-op just
+    // teaches the user the button lies.
+    const { messages: current, isStreaming: streaming, input: draft } = usePeekStore.getState();
+    const hadSomething =
+      streaming || draft.trim().length > 0 || current.some((m) => m.role !== 'system');
+
     abortStream();
     clear();
     clearAttachments();
+    // Starting a new chat means wanting to see it. Leaving History or Models
+    // covering the surface makes the button look like it did nothing.
+    closePanels();
+
+    if (!hadSomething) return;
     setToast({ type: 'success', text: 'New chat' });
     setTimeout(() => setToast(null), 2000);
   }, [abortStream, clear, clearAttachments]);
@@ -517,9 +559,79 @@ export const PeekSurface: React.FC = () => {
 
   const hasConversation = isStreaming || messages.some((m) => m.role !== 'system');
 
-  const handleExchangeChange = useCallback((_current: number, _total: number) => {
-    // No-op
+  const handleViewAttachment = useCallback((att: Attachment) => {
+    setViewingAttachment(att);
+    setHasActiveModalHeight(true);
   }, []);
+
+  const { overlayTourSeen, setOverlayTourSeen } = useSettingsStore();
+  const showFirstRunHint = !overlayTourSeen && !hasConversation && attachments.length === 0;
+
+  /*
+   * What the footer says about the current provider.
+   *
+   * The old status bar rendered nothing for 'checking' and nothing for
+   * "connected but no model" — the two states a fresh install spends most of
+   * its time in — so the user's first signal that anything was wrong was a
+   * three-second toast after they'd already typed a question. Every state now
+   * says something, and the ones the user can act on are clickable.
+   *
+   * Returning null is deliberate for the healthy case: the model pill beside
+   * it already carries that information.
+   */
+  /*
+   * Escape during a stream doesn't cancel it — the answer keeps generating in
+   * the background and fires a desktop notification when it lands. Nothing
+   * said so, so a slow answer just looked like the app had hung. Surfaced only
+   * once the wait is long enough to be worth mentioning.
+   */
+  const [longWait, setLongWait] = useState(false);
+  useEffect(() => {
+    if (!isStreaming) {
+      setLongWait(false);
+      return;
+    }
+    const timer = setTimeout(() => setLongWait(true), 9000);
+    return () => clearTimeout(timer);
+  }, [isStreaming]);
+
+  const footerStatus = useMemo<FooterStatus | null>(() => {
+    const openSettings = () => { invoke('open_settings'); };
+    const pickModel = () => togglePanel('models');
+
+    if (isStreaming && longWait) {
+      return {
+        tone: 'muted',
+        text: 'Still writing — Esc to step away',
+        hint: "Press Esc and Peekaboo keeps working in the background. You'll get a desktop notification when the answer is ready, and it'll be waiting in history.",
+      };
+    }
+
+    if (activeProvider === 'llama') {
+      if (serverStatus === 'starting') return { tone: 'warn', text: 'Starting llama.cpp server…' };
+      if (serverStatus === 'error') return { tone: 'error', text: 'llama.cpp server failed to start', onClick: openSettings };
+      if (serverStatus === 'stopped') return { tone: 'muted', text: 'llama.cpp server stopped', onClick: openSettings };
+      if (!activeModel) return { tone: 'warn', text: 'No model selected', onClick: pickModel };
+      return null;
+    }
+
+    if (providerStatus === 'checking') {
+      return { tone: 'muted', text: `Connecting to ${provider.name}…` };
+    }
+    if (providerStatus === 'disconnected') {
+      return {
+        tone: 'error',
+        text: activeProvider === 'ollama'
+          ? 'Ollama not detected — is it running?'
+          : `Can't reach ${provider.name} — check your API key`,
+        onClick: openSettings,
+      };
+    }
+    if (!activeModel) {
+      return { tone: 'warn', text: 'No model selected', onClick: pickModel };
+    }
+    return null;
+  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name, isStreaming, longWait]);
 
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
@@ -595,99 +707,35 @@ export const PeekSurface: React.FC = () => {
                 }}
               />
 
-              {/* Status bar */}
-              <div className="peek-statusbar">
-                <div className="peek-status-left">
-                  {activeProvider === 'llama' ? (
-                    <>
-                      {serverStatus === 'starting' && (
-                        <span className="peek-status-error" style={{ color: '#ff9800' }}>
-                          Starting llama server…
-                        </span>
-                      )}
-                      {serverStatus === 'error' && (
-                        <span className="peek-status-error">llama server failed to start</span>
-                      )}
-                      {serverStatus === 'running' && activeModel && (
-                        <span className="peek-status-model">
-                          <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#4caf50', marginRight: 5, verticalAlign: 'middle' }} />
-                          {activeModel}
-                        </span>
-                      )}
-                      {serverStatus === 'stopped' && (
-                        <span className="peek-status-error" style={{ color: 'var(--peek-text-muted)' }}>
-                          llama server stopped
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {providerStatus === 'disconnected' && (
-                        <span className="peek-status-error">
-                          {activeProvider === 'ollama' ? 'Ollama not detected — is it running?' :
-                           activeProvider === 'llama' ? 'llama.cpp server disconnected' :
-                           `${provider.name} connection failed — check API key`}
-                        </span>
-                      )}
-                      {providerStatus === 'connected' && activeModel && (
-                        <span className="peek-status-model">{activeModel}</span>
-                      )}
-                    </>
-                  )}
+              {/* First-run orientation, dismissed for good once acknowledged. */}
+              {showFirstRunHint && (
+                <div className="peek-hint">
+                  <div className="peek-hint-items">
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Enter</kbd> to ask</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Alt+/</kbd> all shortcuts</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Esc</kbd> to hide</span>
+                  </div>
+                  <button className="peek-hint-dismiss" onClick={() => setOverlayTourSeen(true)}>
+                    Got it
+                  </button>
                 </div>
-                <div className="peek-status-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AnimatePresence>
-                    {toast && (
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className="peek-bg-indicator"
-                        style={{ 
-                          color: toast.type === 'success' ? '#4caf50' : '#f44336', 
-                          background: toast.type === 'success' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
-                      >
-                        {toast.type === 'success' ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                          </svg>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                          </svg>
-                        )}
-                        {toast.text}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
+              )}
 
-              {/* Paged exchange view */}
+              {/* Conversation transcript. Keyed on the session so switching
+                  history entries remounts cleanly at the bottom. */}
               <AnimatePresence>
                 {hasConversation && (
-                  <ExchangeView
-                    key={`peek-exchange-view-${activeSessionId || 'new'}`}
+                  <Transcript
+                    key={`peek-transcript-${activeSessionId || 'new'}`}
                     messages={messages}
                     streamingContent={streamingContent}
                     isStreaming={isStreaming}
-                    onExchangeChange={handleExchangeChange}
-                    onClickAttachment={(att) => {
-                      setViewingAttachment(att);
-                      setHasActiveModalHeight(true);
-                    }}
+                    onClickAttachment={handleViewAttachment}
                   />
                 )}
               </AnimatePresence>
             </div>
-            
+
             {/* History Panel */}
             <History onSelectSession={handleSelectSession} />
             
@@ -718,7 +766,7 @@ export const PeekSurface: React.FC = () => {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.4)',
+                    background: 'var(--peek-scrim)',
                     backdropFilter: 'blur(4px)',
                     display: 'flex',
                     alignItems: 'center',
@@ -742,7 +790,7 @@ export const PeekSurface: React.FC = () => {
                       maxHeight: '80%',
                       display: 'flex',
                       flexDirection: 'column',
-                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3)',
+                      boxShadow: 'var(--peek-shadow-modal)',
                     }}
                   >
                     <div style={{
@@ -810,6 +858,23 @@ export const PeekSurface: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
+
+          {/*
+            Outside the overlay grid on purpose. The panels are absolutely
+            positioned within that grid, so anything inside it gets covered;
+            keeping the bar here means it is always visible, always clickable,
+            and genuinely pinned to the bottom edge of the surface rather than
+            floating wherever the content above happens to end.
+          */}
+          <Footer
+            onNewChat={handleClear}
+            onCaptureRegion={handleCaptureRegion}
+            captureDisabledReason={isVisionModel ? null : 'Screen capture needs a vision model'}
+            onOpenSettings={() => invoke('open_settings')}
+            status={footerStatus}
+            toast={toast}
+            modelLabel={activeModel || null}
+          />
         </motion.div>
       )}
     </AnimatePresence>

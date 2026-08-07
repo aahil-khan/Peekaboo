@@ -199,8 +199,9 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
     if (slashState.active) {
       // The menu activates on any leading '/', including ordinary text like a
       // file path. When it has nothing selectable, navigation and Enter must
-      // fall through to the textarea — otherwise such a message can never be
-      // sent, and the arrow keys stop working inside it.
+      // fall through to the textarea — otherwise a message such as
+      // "/etc/fstab explain this" can never be sent, and the arrow keys stop
+      // working inside it.
       const hasResults =
         slashState.phase === 1
           ? slashState.manifests.length > 0
@@ -318,8 +319,8 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
           autoComplete="off"
         />
         {isStreaming && (
-          <button className="peek-input-status" onClick={onAbort} style={{ background: 'transparent', border: 'none', cursor: 'pointer', outline: 'none' }} title="Stop generation">
-            <div className="peek-stop-icon" style={{ width: 12, height: 12, background: 'currentColor', borderRadius: 2 }} />
+          <button className="peek-input-status" onClick={onAbort} title="Stop generating (Alt+Q)" aria-label="Stop generating">
+            <div className="peek-stop-icon" />
           </button>
         )}
         {!isStreaming && input.trim() && !slashState.active && (
@@ -331,99 +332,69 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
 
       {/* Shared Command Menu UI */}
       {slashState.active && (
-        <div className="peek-slash-menu" style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          marginTop: '8px',
-          background: 'var(--peek-bg)',
-          border: '1px solid var(--peek-border)',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          zIndex: 10,
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-        }}>
-          {slashState.phase === 1 && (
-            slashState.manifests.length === 0 ? (
-              <div style={{ padding: '8px 12px', color: 'var(--peek-text-muted)', fontSize: '13px' }}>
-                No matching commands
+        <div className="peek-slash-menu" role="listbox">
+          {slashState.phase === 1 &&
+            (slashState.manifests.length === 0 ? (
+              <div className="peek-slash-empty">
+                {registry.getContextPlugins().length === 0
+                  ? 'No context plugins installed.'
+                  : 'No matching command.'}
               </div>
             ) : (
               slashState.manifests.map((m, idx) => (
-                <div
+                <button
                   key={m.plugin.id}
-                  style={{
-                    padding: '8px 12px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: idx === slashState.selectedIndex ? 'var(--peek-hover)' : 'transparent',
-                    color: 'var(--peek-text)'
-                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={idx === slashState.selectedIndex}
+                  className="peek-slash-item"
+                  onMouseEnter={() => setSlashState((s) => ({ ...s, selectedIndex: idx }))}
                   onClick={() => enterPhase2(m)}
                 >
-                  <div style={{ fontWeight: 500 }}>/{m.context?.command}</div>
+                  <span className="peek-slash-item-title">/{m.context?.command}</span>
                   {m.plugin.name && (
-                    <div style={{ fontSize: '12px', color: 'var(--peek-text-muted)' }}>{m.plugin.name}</div>
+                    <span className="peek-slash-item-subtitle">{m.plugin.name}</span>
                   )}
-                </div>
+                </button>
               ))
-            )
-          )}
+            ))}
 
-          {slashState.phase === 2 && (
-            slashState.menuItems.length === 0 ? (
-              <div style={{ padding: '8px 12px', color: 'var(--peek-text-muted)', fontSize: '13px' }}>
-                No results found
+          {slashState.phase === 2 &&
+            (slashState.menuItems.length === 0 ? (
+              <div className="peek-slash-empty">
+                {slashState.pluginQuery ? 'Nothing found.' : 'Type to search.'}
               </div>
             ) : (
               slashState.menuItems.map((item, idx) => {
                 if (item.kind === 'group') {
                   return (
-                    <div key={item.id} style={{
-                      padding: '8px 12px 4px 12px',
-                      fontSize: '11px',
-                      textTransform: 'uppercase',
-                      fontWeight: 600,
-                      color: 'var(--peek-text-muted)',
-                      letterSpacing: '0.05em'
-                    }}>
+                    <div key={item.id} className="peek-slash-group">
                       {item.title}
                     </div>
                   );
                 }
                 return (
-                  <div
+                  <button
                     key={item.id}
-                    style={{
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      fontSize: '14px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      background: idx === slashState.selectedIndex ? 'var(--peek-hover)' : 'transparent',
-                      color: 'var(--peek-text)'
-                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={idx === slashState.selectedIndex}
+                    className="peek-slash-item"
+                    onMouseEnter={() => setSlashState((s) => ({ ...s, selectedIndex: idx }))}
                     onClick={() => {
                       if (slashState.pluginId) {
                         resolveAndAttach(slashState.pluginId, item);
                       }
                     }}
                   >
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ fontWeight: 500 }}>{item.title}</div>
-                      {item.subtitle && (
-                        <div style={{ fontSize: '12px', color: 'var(--peek-text-muted)' }}>{item.subtitle}</div>
-                      )}
-                    </div>
-                  </div>
+                    <span className="peek-slash-item-title">{item.title}</span>
+                    {item.subtitle && (
+                      <span className="peek-slash-item-subtitle">{item.subtitle}</span>
+                    )}
+                  </button>
                 );
               })
-            )
-          )}
+            ))}
         </div>
       )}
     </div>
