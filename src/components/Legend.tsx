@@ -4,18 +4,23 @@ import { usePeekStore } from '../store/peek';
 import { historyVariants } from '../lib/motion';
 
 const HOTKEYS = [
-  { key: 'Alt+Space', description: 'Summon or Hide Peekaboo' },
+  { key: 'Ctrl+Space', description: 'Summon or Hide Peekaboo' },
+  { key: 'Alt+Space', description: 'Summon or Hide (alternate)' },
   { key: 'Enter', description: 'Send Message' },
   { key: 'Shift+Enter', description: 'Line Break (Multi-line)' },
-  { key: 'Alt+K', description: 'Clear Conversation' },
+  { key: '/', description: 'Context Plugin Commands' },
+  { key: 'Alt+N', description: 'New Chat / Clear Conversation' },
+  { key: 'Alt+Q', description: 'Stop Streaming Response' },
+  { key: 'Alt+S', description: 'Capture Screen Region (vision models)' },
+  { key: 'Alt+C', description: 'Copy Last Answer to Clipboard' },
   { key: 'Alt+H', description: 'Toggle History Panel' },
+  { key: 'Alt+R', description: 'Toggle Memory Overlay' },
   { key: 'Alt+M', description: 'Toggle Model Switcher' },
   { key: 'Alt+,', description: 'Open Settings Window' },
   { key: 'Alt+/', description: 'Toggle this Shortcuts Legend' },
   { key: 'Alt+←', description: 'Previous Exchange in Session' },
   { key: 'Alt+→', description: 'Next Exchange in Session' },
   { key: 'Escape', description: 'Hide Window / Dismiss Menu' },
-  { key: 'Up Arrow', description: 'Load Previous Query (when input empty)' },
 ];
 
 export const Legend: React.FC = () => {

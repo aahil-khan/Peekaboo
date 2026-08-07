@@ -10,11 +10,13 @@ interface ShortcutHandlers {
   onClear: () => void;
   onEscape: () => void;
   onStop: () => void;
+  onCaptureRegion: () => void;
+  onCopyLast: () => void;
 }
 
 export function useShortcuts(handlers: ShortcutHandlers) {
   const { visible } = usePeekStore();
-  const { onSubmit, onClear, onEscape, onStop } = handlers;
+  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast } = handlers;
 
   useEffect(() => {
     if (!visible) return;
@@ -53,6 +55,20 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (isMod && e.key.toLowerCase() === 'q') {
         e.preventDefault();
         onStop();
+        return;
+      }
+
+      // Alt+S → Capture a screen region into the conversation
+      if (isMod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onCaptureRegion();
+        return;
+      }
+
+      // Alt+C → Copy the last answer to the clipboard
+      if (isMod && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        onCopyLast();
         return;
       }
 
@@ -141,5 +157,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, onSubmit, onClear, onEscape, onStop]);
+  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast]);
 }
