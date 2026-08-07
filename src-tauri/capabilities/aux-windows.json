@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "aux-windows",
+  "description": "Capability for the Setup and Settings windows — minimal permissions only. `opener` is needed so these windows can link out to provider docs and API-key pages; app-defined commands do not go through capabilities.",
+  "windows": [
+    "settings",
+    "setup"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default"
+  ]
+}
