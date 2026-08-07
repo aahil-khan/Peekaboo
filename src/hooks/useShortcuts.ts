@@ -20,6 +20,12 @@ export function useShortcuts(handlers: ShortcutHandlers) {
     if (!visible) return;
 
     const handleKeyDown: KeyHandler = (e) => {
+      // React's delegated listener sits on the root container, so a key already
+      // handled by a child (Input's Enter, the slash menu's Enter/Escape) still
+      // bubbles to window and would fire the global binding a second time.
+      // preventDefault() alone does not stop that — check for it explicitly.
+      if (e.defaultPrevented) return;
+
       const isMod = e.altKey;
 
       // Enter → Submit (without Shift or Alt)

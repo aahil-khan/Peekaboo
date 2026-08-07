@@ -271,7 +271,7 @@ export const PeekSurface: React.FC = () => {
       sessionId = generateId();
       setActiveSessionId(sessionId);
       try {
-        await createSession(sessionId, activeModel, 'ollama', query.slice(0, 80));
+        await createSession(sessionId, activeModel, activeProvider, query.slice(0, 80));
       } catch (err) {
         console.warn('Failed to create session:', err);
       }
@@ -344,6 +344,7 @@ export const PeekSurface: React.FC = () => {
   }, [
     input,
     activeModel,
+    activeProvider,
     messages,
     activeSessionId,
     addMessage,
