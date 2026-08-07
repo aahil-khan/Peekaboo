@@ -31,6 +31,13 @@ export const DEFAULT_LLAMA_PROFILE: Omit<LlamaProfile, 'id' | 'name' | 'binaryPa
   temperature: 0.8,
 };
 
+/** Follows the OS, or pins light/dark regardless of it. */
+export type ThemeMode = 'system' | 'light' | 'dark';
+
+/** Hue presets. Values must match the [data-accent] blocks in index.css. */
+export const THEME_ACCENTS = ['indigo', 'emerald', 'amber', 'rose'] as const;
+export type ThemeAccent = (typeof THEME_ACCENTS)[number];
+
 interface SettingsState {
   setupCompleted: boolean;
   activeProvider: string;
@@ -43,12 +50,17 @@ interface SettingsState {
   isModelsOpen: boolean;
   systemPrompt: string;
   autoCopyOnHide: boolean;
+  themeMode: ThemeMode;
+  themeAccent: ThemeAccent;
   openaiApiKey: string;
   openaiBaseUrl: string;
   anthropicApiKey: string;
   geminiApiKey: string;
 
   setSetupCompleted: (v: boolean) => void;
+  setHistoryRetentionDays: (v: number) => void;
+  setThemeMode: (v: ThemeMode) => void;
+  setThemeAccent: (v: ThemeAccent) => void;
   setActiveProvider: (v: string) => void;
   setActiveModel: (v: string) => void;
   setOllamaBaseUrl: (v: string) => void;
@@ -82,12 +94,19 @@ export const useSettingsStore = create<SettingsState>()(
       // Off by default on purpose: copying on every dismiss would silently
       // destroy whatever the user already had on their clipboard.
       autoCopyOnHide: false,
+      // Dark, not 'system': the dark palette is the app's designed default and
+      // what an existing install already looks like. Following the OS is opt-in.
+      themeMode: 'dark',
+      themeAccent: 'indigo',
       openaiApiKey: '',
       openaiBaseUrl: 'https://api.openai.com/v1',
       anthropicApiKey: '',
       geminiApiKey: '',
 
       setSetupCompleted: (v) => set({ setupCompleted: v }),
+      setHistoryRetentionDays: (v) => set({ historyRetentionDays: v }),
+      setThemeMode: (v) => set({ themeMode: v }),
+      setThemeAccent: (v) => set({ themeAccent: v }),
       setActiveProvider: (v) => set({ activeProvider: v }),
       setActiveModel: (v) => set({ activeModel: v }),
       setOllamaBaseUrl: (v) => set({ ollamaBaseUrl: v }),
@@ -118,7 +137,24 @@ export const useSettingsStore = create<SettingsState>()(
       setSystemPrompt: (v) => set({ systemPrompt: v }),
       setAutoCopyOnHide: (v) => set({ autoCopyOnHide: v }),
     }),
-    { name: 'peekaboo-settings' }
+    {
+      name: 'peekaboo-settings',
+      version: 1,
+      // No field has changed shape yet, so this is a pass-through. It exists so
+      // the next schema change is a migration rather than a data-loss event —
+      // without a version, zustand cannot tell an old blob from a current one.
+      migrate: (persisted) => persisted as SettingsState,
+      /*
+       * isModelsOpen is transient UI state that was being written to
+       * localStorage and, because every window rehydrates on the storage
+       * event, replicated into the other windows. Keep it out of the
+       * persisted blob.
+       */
+      partialize: (state) => {
+        const { isModelsOpen: _isModelsOpen, ...rest } = state;
+        return rest as SettingsState;
+      },
+    }
   )
 );
 

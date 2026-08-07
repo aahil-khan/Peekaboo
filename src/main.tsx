@@ -10,10 +10,15 @@ import { PeekSurface } from './components/PeekSurface';
 import { Settings } from './components/Settings';
 import { Setup } from './components/Setup';
 import { windowKind } from './lib/windowLabel';
+import { initThemeRuntime } from './lib/theme';
 
 import { invoke } from '@tauri-apps/api/core';
 import { useSettingsStore } from './store/settings';
 import { usePluginsStore } from './store/plugins';
+
+// Module scope, not a component effect: this must survive StrictMode's
+// double-mount, and it applies to every window equally.
+initThemeRuntime();
 
 const App: React.FC = () => {
   // ── Background Plugin Discovery ──
