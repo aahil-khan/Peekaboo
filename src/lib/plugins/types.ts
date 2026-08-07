@@ -4,7 +4,10 @@ export interface PluginManifest {
     id: string;
     name: string;
     version: string;
-    type: 'input' | 'output' | 'model';
+    type: 'input' | 'output' | 'model' | 'context';
+  };
+  context?: {
+    command: string;
   };
   settings?: Record<string, any>;
 }
@@ -13,7 +16,16 @@ export interface ContextFragment {
   id: string;
   type: string;
   content: string;
+  label?: string;
   metadata?: Record<string, any>;
+}
+
+export interface MenuItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  icon?: string;
+  kind?: 'item' | 'group';
 }
 
 export interface PluginContext {
@@ -45,6 +57,12 @@ export interface OutputPluginModule {
   run: (context: PluginContext, result: string) => Promise<void>;
 }
 
+export interface ContextPluginModule {
+  type: 'context';
+  search: (query: string, context: PluginContext) => Promise<MenuItem[]>;
+  resolve: (itemId: string, context: PluginContext) => Promise<ContextFragment[]>;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | any[]; // keeping it flexible for multimodal
@@ -60,7 +78,7 @@ export interface ModelPluginModule {
   stream: (messages: ChatMessage[], options?: ModelOptions) => AsyncGenerator<string>;
 }
 
-export type PluginModule = InputPluginModule | OutputPluginModule | ModelPluginModule;
+export type PluginModule = InputPluginModule | OutputPluginModule | ContextPluginModule | ModelPluginModule;
 
 export interface RegisteredPlugin {
   manifest: PluginManifest;

@@ -44,10 +44,9 @@ const App: React.FC = () => {
 
     const sync = async () => {
       try {
-        const { autoCaptureSelection, setupCompleted } = useSettingsStore.getState();
+        const { setupCompleted } = useSettingsStore.getState();
         await invoke('update_settings', {
           settings: {
-            auto_capture_selection: autoCaptureSelection,
             setup_completed: setupCompleted,
           }
         });
@@ -61,7 +60,6 @@ const App: React.FC = () => {
     const unsubscribe = useSettingsStore.subscribe((state) => {
       invoke('update_settings', {
         settings: {
-          auto_capture_selection: state.autoCaptureSelection,
           setup_completed: state.setupCompleted,
         }
       }).catch(err => console.error('Failed to sync settings to Rust:', err));

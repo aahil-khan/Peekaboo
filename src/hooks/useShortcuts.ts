@@ -10,16 +10,24 @@ interface ShortcutHandlers {
   onClear: () => void;
   onEscape: () => void;
   onStop: () => void;
+  onCaptureRegion: () => void;
+  onCopyLast: () => void;
 }
 
 export function useShortcuts(handlers: ShortcutHandlers) {
   const { visible } = usePeekStore();
-  const { onSubmit, onClear, onEscape, onStop } = handlers;
+  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast } = handlers;
 
   useEffect(() => {
     if (!visible) return;
 
     const handleKeyDown: KeyHandler = (e) => {
+      // React's delegated listener sits on the root container, so a key already
+      // handled by a child (Input's Enter, the slash menu's Enter/Escape) still
+      // bubbles to window and would fire the global binding a second time.
+      // preventDefault() alone does not stop that — check for it explicitly.
+      if (e.defaultPrevented) return;
+
       const isMod = e.altKey;
 
       // Enter → Submit (without Shift or Alt)
@@ -47,6 +55,20 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (isMod && e.key.toLowerCase() === 'q') {
         e.preventDefault();
         onStop();
+        return;
+      }
+
+      // Alt+S → Capture a screen region into the conversation
+      if (isMod && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onCaptureRegion();
+        return;
+      }
+
+      // Alt+C → Copy the last answer to the clipboard
+      if (isMod && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        onCopyLast();
         return;
       }
 
@@ -135,5 +157,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, onSubmit, onClear, onEscape, onStop]);
+  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast]);
 }

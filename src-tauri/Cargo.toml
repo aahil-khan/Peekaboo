@@ -29,6 +29,14 @@ arboard = "3.6.1"
 rfd = "0.15"
 toml = "0.8"
 
+# Screen capture goes through xdg-desktop-portal. GNOME 50 denies the private
+# org.gnome.Shell.Screenshot API ("ScreenshotArea is not allowed"), so the
+# portal is the only working path — and it is the portable one anyway.
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "remote_desktop", "screencast"] }
+url = "2"
+tokio = { version = "1", features = ["time", "rt-multi-thread", "macros"] }
+
 [profile.release]
 opt-level = 3
 lto = true

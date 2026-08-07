@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 import { Input } from './Input';
 import { ExchangeView } from './ExchangeView';
@@ -75,6 +76,10 @@ export const PeekSurface: React.FC = () => {
   const [hasActiveModalHeight, setHasActiveModalHeight] = useState(false);
   const viewingAttachmentRef = useRef<any | null>(null);
   const attachmentsRef = useRef<any[]>([]);
+  // Set while a screen capture is in flight. capture_region hides the overlay so
+  // it isn't in the shot, which fires peek-focus-lost — without this the
+  // auto-hide would tear the React tree down and the window would come back empty.
+  const capturingRef = useRef(false);
   const [isVisionModel, setIsVisionModel] = useState(false);
   const { enabledInputPlugins } = usePluginsStore();
 
@@ -161,7 +166,7 @@ export const PeekSurface: React.FC = () => {
           if (!attachmentsRef.current.some(a => a.content === f.content)) {
             addAttachment({
               type: 'plugin',
-              label: `📎 ${f.id}`,
+              label: f.label || f.id || 'Context',
               content: f.content,
               mediaType: 'text/plain'
             });
@@ -180,38 +185,18 @@ export const PeekSurface: React.FC = () => {
     const unlisten2 = listen('peek-focus-lost', () => {
       // Only auto-hide if not streaming (background task takes over)
       if (!usePeekStore.getState().isStreaming) {
-        invoke('hide_peek');
+        // Debounce focus-loss to prevent spurious hides caused by Wayland resize/command execution artifacts
+        setTimeout(() => {
+          if (!document.hasFocus() && !viewingAttachmentRef.current && !capturingRef.current) {
+            invoke('hide_peek').catch(console.warn);
+          }
+        }, 150);
       }
-    });
-
-    const unlisten3 = listen<string>('peek-highlighted-text', (event) => {
-      const text = event.payload;
-      const trimmed = text.trim();
-      if (trimmed) {
-        if (attachmentsRef.current.some((att) => att.content === trimmed)) {
-          return;
-        }
-        const preview = trimmed.replace(/\s+/g, ' ').slice(0, 20);
-        const label = `Selected: "${preview}${trimmed.length > 20 ? '...' : ''}"`;
-        addAttachment({
-          type: 'selection',
-          label,
-          content: trimmed,
-          mediaType: 'text/plain'
-        });
-      }
-      setTimeout(() => {
-        const ta = document.querySelector('.peek-input') as HTMLTextAreaElement;
-        if (ta) {
-          ta.focus();
-        }
-      }, 50);
     });
 
     return () => {
       unlisten1.then((fn) => fn());
       unlisten2.then((fn) => fn());
-      unlisten3.then((fn) => fn());
     };
   }, [setVisible, setInput, addAttachment]);
 
@@ -271,7 +256,7 @@ export const PeekSurface: React.FC = () => {
       sessionId = generateId();
       setActiveSessionId(sessionId);
       try {
-        await createSession(sessionId, activeModel, 'ollama', query.slice(0, 80));
+        await createSession(sessionId, activeModel, activeProvider, query.slice(0, 80));
       } catch (err) {
         console.warn('Failed to create session:', err);
       }
@@ -344,6 +329,7 @@ export const PeekSurface: React.FC = () => {
   }, [
     input,
     activeModel,
+    activeProvider,
     messages,
     activeSessionId,
     addMessage,
@@ -397,6 +383,87 @@ export const PeekSurface: React.FC = () => {
 
 
 
+  // ── Copy the most recent answer ──
+  const lastAssistantText = useCallback((): string | null => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === 'assistant' && typeof m.content === 'string') return m.content;
+    }
+    return null;
+  }, [messages]);
+
+  const handleCopyLast = useCallback(async () => {
+    const text = lastAssistantText();
+    if (!text) {
+      setToast({ type: 'error', text: 'No answer to copy yet' });
+      setTimeout(() => setToast(null), 2000);
+      return;
+    }
+    try {
+      await writeText(text);
+      setToast({ type: 'success', text: 'Answer copied' });
+      setTimeout(() => setToast(null), 2000);
+    } catch {
+      setToast({ type: 'error', text: 'Clipboard write failed' });
+      setTimeout(() => setToast(null), 3000);
+    }
+  }, [lastAssistantText]);
+
+  // Opt-in only. Firing on every dismiss would clobber whatever the user
+  // already had on their clipboard, so this is off unless explicitly enabled
+  // and only ever copies a *completed* response.
+  useEffect(() => {
+    if (visible) return;
+    if (!useSettingsStore.getState().autoCopyOnHide) return;
+    if (usePeekStore.getState().isStreaming) return;
+    const msgs = usePeekStore.getState().messages;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.role === 'assistant' && typeof m.content === 'string') {
+        writeText(m.content).catch(() => {});
+        break;
+      }
+    }
+  }, [visible]);
+
+  // ── Capture a screen region and attach it ──
+  const handleCaptureRegion = useCallback(async () => {
+    if (!isVisionModel) {
+      setToast({ type: 'error', text: 'Active model has no vision support — switch models first' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    capturingRef.current = true;
+    try {
+      const base64 = await invoke<string>('capture_region');
+      if (base64) {
+        addAttachment({
+          type: 'screenshot',
+          label: 'Screen Region',
+          content: base64,
+          mediaType: 'image/png',
+        });
+        setToast({ type: 'success', text: 'Region attached' });
+        setTimeout(() => setToast(null), 2000);
+      }
+    } catch (err) {
+      const msg = String(err);
+      // Dismissing the portal picker is a normal outcome, not a failure.
+      if (!/cancel/i.test(msg)) {
+        setToast({ type: 'error', text: msg.replace(/^Error:\s*/, '').slice(0, 90) });
+        setTimeout(() => setToast(null), 4000);
+      }
+    } finally {
+      // Hold the guard briefly past the Rust-side show() so a trailing
+      // focus event from the portal closing can't re-trigger the auto-hide.
+      setTimeout(() => { capturingRef.current = false; }, 400);
+      // Belt and braces: if anything did manage to flip us hidden, come back.
+      if (!usePeekStore.getState().visible) {
+        invoke('show_peek').catch(console.warn);
+      }
+    }
+  }, [isVisionModel, addAttachment]);
+
   // ── Load session from history ──
   const handleSelectSession = useCallback(
     async (session: Session) => {
@@ -424,6 +491,8 @@ export const PeekSurface: React.FC = () => {
     onClear: handleClear,
     onEscape: handleEscape,
     onStop: abortStream,
+    onCaptureRegion: handleCaptureRegion,
+    onCopyLast: handleCopyLast,
   });
 
   // Generic Provider status check
@@ -492,6 +561,14 @@ export const PeekSurface: React.FC = () => {
               <Input
                 onSubmit={handleSubmit}
                 onAbort={abortStream}
+                onAttachFragment={(f) => {
+                  addAttachment({
+                    type: 'plugin',
+                    label: f.label || f.id || 'Context',
+                    content: f.content,
+                    mediaType: 'text/plain',
+                  });
+                }}
                 onAttachImage={isVisionModel ? (base64, mediaType) => {
                   // Determine a nice label based on type
                   const isPng = mediaType.includes('png');

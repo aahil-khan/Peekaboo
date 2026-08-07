@@ -42,7 +42,7 @@ interface SettingsState {
   historyRetentionDays: number;
   isModelsOpen: boolean;
   systemPrompt: string;
-  autoCaptureSelection: boolean;
+  autoCopyOnHide: boolean;
   openaiApiKey: string;
   openaiBaseUrl: string;
   anthropicApiKey: string;
@@ -63,7 +63,7 @@ interface SettingsState {
   setActiveLlamaProfileId: (id: string | null) => void;
   setModelsOpen: (v: boolean) => void;
   setSystemPrompt: (v: string) => void;
-  setAutoCaptureSelection: (v: boolean) => void;
+  setAutoCopyOnHide: (v: boolean) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -79,7 +79,9 @@ export const useSettingsStore = create<SettingsState>()(
       historyRetentionDays: 90,
       isModelsOpen: false,
       systemPrompt: 'You are Peekaboo, a highly capable, concise, and helpful AI desktop assistant. Do not use conversational filler. Provide direct, accurate answers.',
-      autoCaptureSelection: true,
+      // Off by default on purpose: copying on every dismiss would silently
+      // destroy whatever the user already had on their clipboard.
+      autoCopyOnHide: false,
       openaiApiKey: '',
       openaiBaseUrl: 'https://api.openai.com/v1',
       anthropicApiKey: '',
@@ -114,7 +116,7 @@ export const useSettingsStore = create<SettingsState>()(
       }),
       setModelsOpen: (v) => set({ isModelsOpen: v }),
       setSystemPrompt: (v) => set({ systemPrompt: v }),
-      setAutoCaptureSelection: (v) => set({ autoCaptureSelection: v }),
+      setAutoCopyOnHide: (v) => set({ autoCopyOnHide: v }),
     }),
     { name: 'peekaboo-settings' }
   )

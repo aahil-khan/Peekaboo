@@ -19,6 +19,8 @@
     "sql:allow-select",
     "sql:allow-close",
     "clipboard-manager:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
     {
       "identifier": "http:default",
       "allow": [
