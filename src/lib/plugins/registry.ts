@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule } from './types';
+import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule, SystemInfo, FileMatch } from './types';
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
@@ -41,18 +41,13 @@ export class PluginRegistry {
       // Load as an ESM module by creating a base64 Data URL to prevent WebkitGTK Blob URL crashes
       const base64 = btoa(unescape(encodeURIComponent(jsCode)));
       const url = `data:text/javascript;base64,${base64}`;
-      
-      try {
-        const module = await import(/* @vite-ignore */ url);
-        if (module && module.default && typeof module.default === 'object') {
-          p.module = module.default;
-          p.loaded = true;
-        } else {
-          throw new Error('Plugin does not default export a valid object');
-        }
-      } catch (err) {
-        throw err;
+
+      const module = await import(/* @vite-ignore */ url);
+      if (!module?.default || typeof module.default !== 'object') {
+        throw new Error('Plugin does not default export a valid object');
       }
+      p.module = module.default;
+      p.loaded = true;
     } catch (err) {
       p.error = String(err);
       console.warn(`Failed to load plugin ${id}:`, err);
@@ -75,8 +70,15 @@ export class PluginRegistry {
       captureRegion: async () => invoke<string>('capture_region'),
       typeText: async (text: string) => invoke<void>('type_text', { text }),
       notify: async (title: string, body: string) => invoke<void>('show_notification', { title, body }),
-      readFile: async (path: string) => invoke<string>('plugin_read_file', { path }),
-      writeFile: async (path: string, text: string) => invoke<void>('plugin_write_file', { path, text }),
+      getSystemInfo: async () => invoke<SystemInfo>('plugin_system_info'),
+      searchFiles: async (query: string) => invoke<FileMatch[]>('plugin_search_files', { query }),
+      // The plugin id is passed rather than trusted from the caller so the
+      // backend can scope filesystem access per plugin — a plugin cannot name
+      // someone else's data directory.
+      readFile: async (path: string) =>
+        invoke<string>('plugin_read_file', { pluginId: manifest.plugin.id, path }),
+      writeFile: async (path: string, text: string) =>
+        invoke<void>('plugin_write_file', { pluginId: manifest.plugin.id, path, text }),
     };
   }
 

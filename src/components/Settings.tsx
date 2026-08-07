@@ -442,21 +442,22 @@ export const Settings: React.FC = () => {
           <>
             <h2 className="peek-settings-h2">Plugins</h2>
             <p className="peek-settings-intro">
-              Optional add-ons that pull in context, act on answers, or add a model provider. They
-              load from a folder on this machine — there's no store to browse.
+              Add-ons that pull in context, act on answers, or add a model provider. Some ship with
+              Peekaboo; you can add your own by dropping a folder containing a{' '}
+              <code>plugin.toml</code> into <code>~/.config/peekaboo/plugins/</code>. Giving yours
+              the same id as a built-in replaces it.
             </p>
 
             <div className="peek-settings-card">
               {manifests.length === 0 ? (
                 <>
                   <span className="peek-settings-desc">
-                    Nothing installed. Peekaboo looks for plugins in{' '}
-                    <code>~/.config/peekaboo/plugins/</code>, one folder each containing a{' '}
-                    <code>plugin.toml</code>.
+                    No plugins were found — not even the built-in ones, which means discovery
+                    failed rather than that nothing is installed.
                   </span>
                   <span className="peek-settings-desc peek-tone-warn">
-                    Plugins run with full access to your files, clipboard and screen. Only install
-                    ones you trust.
+                    Plugins can read your clipboard, your screen, and files in your home directory
+                    outside hidden folders. Only install ones you trust.
                   </span>
                 </>
               ) : (
@@ -476,6 +477,7 @@ export const Settings: React.FC = () => {
                           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <span className="peek-settings-label">{m.plugin.name}</span>
                             <span className="peek-badge">{type}</span>
+                            {m.plugin.builtin === false && <span className="peek-badge">installed</span>}
                             {type === 'context' && m.context?.command && (
                               <span className="peek-form-hint">/{m.context.command}</span>
                             )}

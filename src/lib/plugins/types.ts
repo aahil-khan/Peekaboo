@@ -5,6 +5,8 @@ export interface PluginManifest {
     name: string;
     version: string;
     type: 'input' | 'output' | 'model' | 'context';
+    /** Set by the backend: true for a plugin compiled into the app. */
+    builtin?: boolean;
   };
   context?: {
     command: string;
@@ -28,6 +30,23 @@ export interface MenuItem {
   kind?: 'item' | 'group';
 }
 
+export interface SystemInfo {
+  cpu: {
+    usage: number;
+    cores: number;
+    brand: string;
+    /** null where the platform has no load average (Windows). */
+    load_average: [number, number, number] | null;
+  };
+  memory: { total: number; used: number; swap_total: number; swap_used: number };
+  disks: { mount_point: string; file_system: string; total: number; available: number }[];
+}
+
+export interface FileMatch {
+  path: string;
+  name: string;
+}
+
 export interface PluginContext {
   pluginId: string;
   settings: Record<string, any>;
@@ -43,6 +62,13 @@ export interface PluginContext {
   captureRegion: () => Promise<string>;
   typeText: (text: string) => Promise<void>;
   notify: (title: string, body: string) => Promise<void>;
+  getSystemInfo: () => Promise<SystemInfo>;
+  /** Filename search under $HOME. Hidden paths are never returned. */
+  searchFiles: (query: string) => Promise<FileMatch[]>;
+  /**
+   * Read a UTF-8 file. Restricted to $HOME excluding dot-paths, plus this
+   * plugin's own data directory; rejects on anything else.
+   */
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, text: string) => Promise<void>;
 }

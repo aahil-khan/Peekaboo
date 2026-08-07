@@ -28,6 +28,10 @@ base64 = "0.22.1"
 arboard = "3.6.1"
 rfd = "0.15"
 toml = "0.8"
+# Built-in plugins are compiled into the binary rather than copied to the user's
+# config directory on first run. A copy would silently go stale on upgrade.
+include_dir = "0.7"
+sysinfo = "0.33"
 
 # Screen capture goes through xdg-desktop-portal. GNOME 50 denies the private
 # org.gnome.Shell.Screenshot API ("ScreenshotArea is not allowed"), so the

@@ -1,0 +1,10 @@
+api_version = 1
+
+[plugin]
+id = "clipboard"
+name = "Clipboard"
+version = "1.0.0"
+type = "context"
+
+[context]
+command = "clipboard"

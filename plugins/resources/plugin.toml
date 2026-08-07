@@ -1,0 +1,10 @@
+api_version = 1
+
+[plugin]
+id = "resources"
+name = "System Resources"
+version = "1.1.0"
+type = "context"
+
+[context]
+command = "resources"

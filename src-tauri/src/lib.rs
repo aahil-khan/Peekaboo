@@ -313,95 +313,567 @@ mod commands {
 }
 
 mod plugin_commands {
+    use include_dir::{include_dir, Dir};
+    use serde_json::{json, Value};
+    use std::collections::{BTreeMap, VecDeque};
+    use std::path::{Path, PathBuf};
     use tauri::AppHandle;
-    use serde_json::Value;
-    use std::path::PathBuf;
+
+    /// Plugins shipped with the app, compiled in from `plugins/` at the repo
+    /// root rather than copied into the user's config directory on first run.
+    /// A copy would go stale the moment the app updated, leaving people running
+    /// last version's plugin with nothing to indicate it.
+    static BUILTIN_PLUGINS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../plugins");
 
     fn get_plugins_dir(_app: &AppHandle) -> Option<PathBuf> {
         let home = std::env::var("HOME").ok()?;
         Some(PathBuf::from(home).join(".config").join("peekaboo").join("plugins"))
     }
 
+    fn manifest_id(value: &Value) -> Option<String> {
+        value.get("plugin")?.get("id")?.as_str().map(str::to_owned)
+    }
+
+    /// Record where a manifest came from, so Settings can tell a bundled plugin
+    /// from an installed one — and show when a built-in has been overridden.
+    fn tag_builtin(value: &mut Value, builtin: bool) {
+        if let Some(plugin) = value.get_mut("plugin").and_then(Value::as_object_mut) {
+            plugin.insert("builtin".into(), json!(builtin));
+        }
+    }
+
+    fn builtin_manifests() -> Vec<Value> {
+        BUILTIN_PLUGINS
+            .dirs()
+            .filter_map(|dir| {
+                let file = dir.get_file(dir.path().join("plugin.toml"))?;
+                let mut value = toml::from_str::<Value>(file.contents_utf8()?).ok()?;
+                tag_builtin(&mut value, true);
+                Some(value)
+            })
+            .collect()
+    }
+
     #[tauri::command]
     pub fn discover_plugins(app: AppHandle) -> Result<Vec<Value>, String> {
-        let plugins_dir = get_plugins_dir(&app).ok_or("Could not resolve plugins directory")?;
-        
-        let mut plugins = Vec::new();
-        if !plugins_dir.exists() {
-            let _ = std::fs::create_dir_all(&plugins_dir);
-            return Ok(plugins);
+        // Keyed by plugin id so a user plugin replaces the built-in of the same
+        // name. That is the documented way to customise a bundled plugin, since
+        // the bundled copy itself is not editable on disk.
+        let mut by_id: BTreeMap<String, Value> = BTreeMap::new();
+
+        for manifest in builtin_manifests() {
+            if let Some(id) = manifest_id(&manifest) {
+                by_id.insert(id, manifest);
+            }
         }
 
-        if let Ok(entries) = std::fs::read_dir(plugins_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    let toml_path = path.join("plugin.toml");
-                    if toml_path.exists() {
-                        if let Ok(toml_str) = std::fs::read_to_string(&toml_path) {
-                            if let Ok(value) = toml::from_str::<Value>(&toml_str) {
-                                plugins.push(value);
-                            }
-                        }
+        if let Some(plugins_dir) = get_plugins_dir(&app) {
+            if !plugins_dir.exists() {
+                let _ = std::fs::create_dir_all(&plugins_dir);
+            }
+            if let Ok(entries) = std::fs::read_dir(&plugins_dir) {
+                for entry in entries.flatten() {
+                    let toml_path = entry.path().join("plugin.toml");
+                    if !toml_path.is_file() {
+                        continue;
+                    }
+                    let Ok(text) = std::fs::read_to_string(&toml_path) else {
+                        continue;
+                    };
+                    let Ok(mut value) = toml::from_str::<Value>(&text) else {
+                        continue;
+                    };
+                    tag_builtin(&mut value, false);
+                    if let Some(id) = manifest_id(&value) {
+                        by_id.insert(id, value);
                     }
                 }
             }
         }
-        Ok(plugins)
+
+        Ok(by_id.into_values().collect())
+    }
+
+    /// Locate a user-installed plugin directory by manifest id.
+    fn user_plugin_dir(app: &AppHandle, plugin_id: &str) -> Option<PathBuf> {
+        let entries = std::fs::read_dir(get_plugins_dir(app)?).ok()?;
+        for entry in entries.flatten() {
+            let dir = entry.path();
+            let toml_path = dir.join("plugin.toml");
+            if !toml_path.is_file() {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&toml_path) else {
+                continue;
+            };
+            let Ok(value) = toml::from_str::<Value>(&text) else {
+                continue;
+            };
+            if manifest_id(&value).as_deref() == Some(plugin_id) {
+                return Some(dir);
+            }
+        }
+        None
     }
 
     #[tauri::command]
     pub fn get_plugin_js(app: AppHandle, plugin_id: String) -> Result<String, String> {
-        let plugins_dir = get_plugins_dir(&app).ok_or("Could not resolve plugins directory")?;
-        
-        if let Ok(entries) = std::fs::read_dir(plugins_dir) {
+        // User directory first. An override has to win here as well as in
+        // discovery, or a customised plugin would show its own manifest while
+        // running the built-in's code.
+        if let Some(dir) = user_plugin_dir(&app, &plugin_id) {
+            for candidate in [dir.join("dist").join("index.js"), dir.join("index.js")] {
+                if candidate.exists() {
+                    return std::fs::read_to_string(&candidate)
+                        .map_err(|e| format!("Failed to read {}: {e}", candidate.display()));
+                }
+            }
+            return Err(format!(
+                "Plugin {plugin_id} has neither dist/index.js nor index.js"
+            ));
+        }
+
+        for dir in BUILTIN_PLUGINS.dirs() {
+            let Some(file) = dir.get_file(dir.path().join("plugin.toml")) else {
+                continue;
+            };
+            let Some(text) = file.contents_utf8() else {
+                continue;
+            };
+            let Ok(value) = toml::from_str::<Value>(text) else {
+                continue;
+            };
+            if manifest_id(&value).as_deref() != Some(plugin_id.as_str()) {
+                continue;
+            }
+            return dir
+                .get_file(dir.path().join("index.js"))
+                .and_then(|f| f.contents_utf8())
+                .map(str::to_owned)
+                .ok_or_else(|| format!("Built-in plugin {plugin_id} has no index.js"));
+        }
+
+        Err(format!("Plugin {plugin_id} not found"))
+    }
+
+    fn home_dir() -> Result<PathBuf, String> {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .map_err(|_| "HOME is not set".to_string())
+    }
+
+    /// Per-plugin scratch space. It sits under a dot-directory, which the
+    /// general rule below forbids, so it is permitted explicitly.
+    fn plugin_data_dir(plugin_id: &str) -> Result<PathBuf, String> {
+        let invalid = plugin_id.is_empty()
+            || plugin_id.contains('/')
+            || plugin_id.contains('\\')
+            || plugin_id.contains("..");
+        if invalid {
+            return Err(format!("Invalid plugin id {plugin_id:?}"));
+        }
+        Ok(home_dir()?
+            .join(".local")
+            .join("share")
+            .join("peekaboo")
+            .join("plugin-data")
+            .join(plugin_id))
+    }
+
+    /// Resolve to an absolute path with symlinks collapsed.
+    ///
+    /// This runs before the allowlist check, so a symlink sitting inside the
+    /// permitted area but pointing outside it cannot be used to escape. A file
+    /// being written need not exist yet, so the parent is canonicalised instead.
+    fn canonical_target(raw: &str) -> Result<PathBuf, String> {
+        let path = Path::new(raw);
+        if path.exists() {
+            return path.canonicalize().map_err(|e| format!("{raw}: {e}"));
+        }
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .ok_or_else(|| format!("{raw}: no parent directory"))?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| format!("{raw}: not a file path"))?;
+        Ok(parent
+            .canonicalize()
+            .map_err(|e| format!("{}: {e}", parent.display()))?
+            .join(name))
+    }
+
+    /// A plugin may touch its own data directory, and files under $HOME that
+    /// contain no dot-component. That second rule is what keeps `~/.ssh`,
+    /// `~/.aws` and `~/.bashrc` out of reach while leaving ordinary documents
+    /// available.
+    ///
+    /// This is a real boundary, not a sandbox — plugin JavaScript still runs in
+    /// the app's webview and can reach the network.
+    fn check_allowed(plugin_id: &str, raw: &str) -> Result<PathBuf, String> {
+        let data_dir = plugin_data_dir(plugin_id)?;
+        let _ = std::fs::create_dir_all(&data_dir);
+        check_allowed_in(&home_dir()?, &data_dir, raw)
+    }
+
+    /// The rule itself, with the two roots injected so it can be tested against
+    /// a scratch directory instead of the real home.
+    fn check_allowed_in(home: &Path, data_dir: &Path, raw: &str) -> Result<PathBuf, String> {
+        let target = canonical_target(raw)?;
+
+        if let Ok(canonical_data) = data_dir.canonicalize() {
+            if target.starts_with(&canonical_data) {
+                return Ok(target);
+            }
+        }
+
+        let home = home
+            .canonicalize()
+            .map_err(|e| format!("Could not resolve home directory: {e}"))?;
+
+        let rest = target.strip_prefix(&home).map_err(|_| {
+            format!("{raw} is outside your home directory, which plugins may not access")
+        })?;
+
+        let hidden = rest
+            .components()
+            .any(|c| c.as_os_str().to_string_lossy().starts_with('.'));
+        if hidden {
+            return Err(format!(
+                "{raw} is hidden or inside a hidden directory; plugins may not access dotfiles"
+            ));
+        }
+
+        Ok(target)
+    }
+
+    #[cfg(test)]
+    mod builtin_tests {
+        use super::{builtin_manifests, manifest_id, BUILTIN_PLUGINS};
+
+        /// Built-ins are embedded at compile time, so a plugin that stops being
+        /// discoverable would otherwise fail silently at runtime on a machine
+        /// nobody is looking at.
+        #[test]
+        fn every_bundled_plugin_is_embedded_and_parses() {
+            let ids: Vec<String> = builtin_manifests().iter().filter_map(manifest_id).collect();
+
+            for expected in ["resources", "clipboard", "file", "selection-capture"] {
+                assert!(ids.contains(&expected.to_string()), "missing built-in: {expected}\nfound: {ids:?}");
+            }
+        }
+
+        #[test]
+        fn every_bundled_plugin_ships_its_javascript() {
+            for dir in BUILTIN_PLUGINS.dirs() {
+                let has_js = dir.get_file(dir.path().join("index.js")).is_some();
+                assert!(has_js, "{} has a manifest but no index.js", dir.path().display());
+            }
+        }
+
+        /// Not part of the normal suite: it walks the real home directory, so
+        /// the result depends on the machine. Run it with
+        /// `cargo test --lib search_budget -- --ignored --nocapture` when
+        /// changing the traversal caps.
+        #[test]
+        #[ignore]
+        fn search_budget() {
+            // A query that matches nothing is the worst case: it never fills
+            // the result cap, so the walk runs until the visit cap instead.
+            for query in ["zzqxnomatch", "config"] {
+                let start = std::time::Instant::now();
+                let hits = super::plugin_search_files(query.into()).unwrap();
+                let elapsed = start.elapsed();
+                println!("searchFiles({query:?}): {} hits in {elapsed:?} (budget 800ms)", hits.len());
+                assert!(elapsed.as_millis() < 800, "{query:?} exceeded its budget: {elapsed:?}");
+            }
+        }
+
+        #[test]
+        fn context_plugins_declare_a_command() {
+            for manifest in builtin_manifests() {
+                let is_context = manifest["plugin"]["type"].as_str() == Some("context");
+                if !is_context {
+                    continue;
+                }
+                let id = manifest_id(&manifest).unwrap_or_default();
+                assert!(
+                    manifest["context"]["command"].as_str().is_some(),
+                    "context plugin {id} has no [context] command, so it can never be typed"
+                );
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod fs_scope_tests {
+        use super::check_allowed_in;
+        use std::path::{Path, PathBuf};
+
+        /// A scratch "home" with a data dir inside it, unique per test so the
+        /// suite can run in parallel.
+        struct Scratch {
+            root: PathBuf,
+        }
+
+        impl Scratch {
+            fn new(name: &str) -> Self {
+                let root = std::env::temp_dir().join(format!("peekaboo-fs-scope-{name}"));
+                let _ = std::fs::remove_dir_all(&root);
+                std::fs::create_dir_all(root.join("Documents")).unwrap();
+                std::fs::create_dir_all(root.join(".ssh")).unwrap();
+                std::fs::create_dir_all(root.join("data")).unwrap();
+                Self { root }
+            }
+            fn home(&self) -> &Path {
+                &self.root
+            }
+            fn data(&self) -> PathBuf {
+                self.root.join("data")
+            }
+            fn path(&self, rel: &str) -> String {
+                self.root.join(rel).to_string_lossy().into_owned()
+            }
+        }
+
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.root);
+            }
+        }
+
+        #[test]
+        fn allows_an_ordinary_file_in_home() {
+            let s = Scratch::new("ordinary");
+            std::fs::write(s.root.join("Documents/notes.txt"), "hi").unwrap();
+            assert!(check_allowed_in(s.home(), &s.data(), &s.path("Documents/notes.txt")).is_ok());
+        }
+
+        #[test]
+        fn allows_a_file_that_does_not_exist_yet() {
+            let s = Scratch::new("newfile");
+            assert!(check_allowed_in(s.home(), &s.data(), &s.path("Documents/new.txt")).is_ok());
+        }
+
+        #[test]
+        fn refuses_dotfiles_and_dot_directories() {
+            let s = Scratch::new("dotfiles");
+            std::fs::write(s.root.join(".ssh/id_ed25519"), "key").unwrap();
+            std::fs::write(s.root.join(".bashrc"), "export").unwrap();
+
+            for p in [".ssh/id_ed25519", ".bashrc"] {
+                let err = check_allowed_in(s.home(), &s.data(), &s.path(p))
+                    .expect_err("dot-paths must be refused");
+                assert!(err.contains("hidden"), "unexpected message: {err}");
+            }
+        }
+
+        #[test]
+        fn refuses_paths_outside_home() {
+            let s = Scratch::new("outside");
+            let err = check_allowed_in(s.home(), &s.data(), "/etc/passwd")
+                .expect_err("paths outside home must be refused");
+            assert!(err.contains("outside your home"), "unexpected message: {err}");
+        }
+
+        #[test]
+        fn refuses_traversal_out_of_home() {
+            let s = Scratch::new("traversal");
+            assert!(check_allowed_in(s.home(), &s.data(), &s.path("Documents/../../../etc/passwd"))
+                .is_err());
+        }
+
+        #[test]
+        fn allows_the_plugins_own_data_directory() {
+            let s = Scratch::new("datadir");
+            let target = s.data().join("cache.json").to_string_lossy().into_owned();
+            assert!(check_allowed_in(s.home(), &s.data(), &target).is_ok());
+        }
+
+        /// The reason canonicalisation happens before the allowlist check: a
+        /// link sitting in an allowed directory must not become a way out.
+        #[cfg(unix)]
+        #[test]
+        fn refuses_a_symlink_pointing_out_of_home() {
+            let s = Scratch::new("symlink");
+            let link = s.root.join("Documents/escape");
+            std::os::unix::fs::symlink("/etc", &link).unwrap();
+
+            let err = check_allowed_in(s.home(), &s.data(), &s.path("Documents/escape/passwd"))
+                .expect_err("symlink escape must be refused");
+            assert!(err.contains("outside your home"), "unexpected message: {err}");
+        }
+
+        /// The dot-rule applies to the resolved path, so a plain-looking link
+        /// into a hidden directory is refused too.
+        #[cfg(unix)]
+        #[test]
+        fn refuses_a_symlink_into_a_hidden_directory() {
+            let s = Scratch::new("hiddenlink");
+            std::fs::write(s.root.join(".ssh/id_ed25519"), "key").unwrap();
+            std::os::unix::fs::symlink(s.root.join(".ssh"), s.root.join("Documents/keys")).unwrap();
+
+            assert!(
+                check_allowed_in(s.home(), &s.data(), &s.path("Documents/keys/id_ed25519")).is_err()
+            );
+        }
+    }
+
+    #[tauri::command]
+    pub fn plugin_read_file(plugin_id: String, path: String) -> Result<String, String> {
+        let target = check_allowed(&plugin_id, &path)?;
+        std::fs::read_to_string(&target).map_err(|e| format!("{}: {e}", target.display()))
+    }
+
+    #[tauri::command]
+    pub fn plugin_write_file(
+        plugin_id: String,
+        path: String,
+        text: String,
+    ) -> Result<(), String> {
+        let target = check_allowed(&plugin_id, &path)?;
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("{}: {e}", parent.display()))?;
+        }
+        std::fs::write(&target, text).map_err(|e| format!("{}: {e}", target.display()))
+    }
+
+    const SEARCH_RESULT_LIMIT: usize = 40;
+    const SEARCH_VISIT_LIMIT: usize = 40_000;
+    const SEARCH_MAX_DEPTH: usize = 6;
+
+    /// Never worth walking: large, generated, and never what someone means when
+    /// they say "attach a file".
+    const SKIP_DIRS: [&str; 7] = [
+        "node_modules",
+        "target",
+        "dist",
+        "build",
+        "__pycache__",
+        "venv",
+        ".git",
+    ];
+
+    #[tauri::command]
+    pub fn plugin_search_files(query: String) -> Result<Vec<Value>, String> {
+        let needle = query.trim().to_lowercase();
+        if needle.len() < 2 {
+            return Ok(Vec::new());
+        }
+
+        let mut results: Vec<Value> = Vec::new();
+        let mut visited = 0usize;
+        let mut queue: VecDeque<(PathBuf, usize)> = VecDeque::from([(home_dir()?, 0usize)]);
+
+        // Breadth-first, so shallow matches — the ones a person is most likely
+        // to mean — surface ahead of anything buried in a source tree. Both
+        // caps exist to keep this inside the 800ms search budget on a large
+        // home directory; hitting one truncates rather than hangs.
+        while let Some((dir, depth)) = queue.pop_front() {
+            if results.len() >= SEARCH_RESULT_LIMIT || visited >= SEARCH_VISIT_LIMIT {
+                break;
+            }
+            let Ok(entries) = std::fs::read_dir(&dir) else {
+                continue;
+            };
+
             for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    let toml_path = path.join("plugin.toml");
-                    if toml_path.exists() {
-                        if let Ok(toml_str) = std::fs::read_to_string(&toml_path) {
-                            if let Ok(value) = toml::from_str::<Value>(&toml_str) {
-                                if let Some(plugin_block) = value.get("plugin") {
-                                    if let Some(id_val) = plugin_block.get("id") {
-                                        if id_val.as_str() == Some(&plugin_id) {
-                                            let dist_js = path.join("dist").join("index.js");
-                                            let root_js = path.join("index.js");
-                                            let js_path = if dist_js.exists() {
-                                                dist_js
-                                            } else if root_js.exists() {
-                                                root_js
-                                            } else {
-                                                return Err(format!(
-                                                    "Plugin JS not found (tried dist/index.js and index.js) for {}",
-                                                    plugin_id
-                                                ));
-                                            };
-                                            return std::fs::read_to_string(js_path)
-                                                .map_err(|e| format!("Failed to read JS: {}", e));
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                visited += 1;
+                if visited >= SEARCH_VISIT_LIMIT {
+                    break;
+                }
+
+                let name = entry.file_name().to_string_lossy().to_string();
+                // The same rule check_allowed enforces, applied during the walk
+                // so hidden files never reach the menu in the first place.
+                if name.starts_with('.') {
+                    continue;
+                }
+
+                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                if is_dir {
+                    if depth < SEARCH_MAX_DEPTH && !SKIP_DIRS.contains(&name.as_str()) {
+                        queue.push_back((entry.path(), depth + 1));
                     }
+                    continue;
+                }
+
+                if name.to_lowercase().contains(&needle) {
+                    if results.len() >= SEARCH_RESULT_LIMIT {
+                        break;
+                    }
+                    results.push(json!({
+                        "path": entry.path().to_string_lossy(),
+                        "name": name,
+                    }));
                 }
             }
         }
-        Err("Plugin not found".into())
+
+        Ok(results)
     }
 
     #[tauri::command]
-    pub fn plugin_read_file(path: String) -> Result<String, String> {
-        std::fs::read_to_string(path).map_err(|e| e.to_string())
-    }
+    pub async fn plugin_system_info() -> Result<Value, String> {
+        // CPU percentages are meaningless until sysinfo has two samples a short
+        // interval apart, so this has to sleep — on a blocking thread, not the
+        // one servicing the UI.
+        tauri::async_runtime::spawn_blocking(|| {
+            use sysinfo::{Disks, System};
 
-    #[tauri::command]
-    pub fn plugin_write_file(path: String, text: String) -> Result<(), String> {
-        if let Some(parent) = std::path::Path::new(&path).parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        std::fs::write(path, text).map_err(|e| e.to_string())
+            let mut sys = System::new();
+            sys.refresh_cpu_usage();
+            std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
+            sys.refresh_cpu_usage();
+            sys.refresh_memory();
+
+            let cpus = sys.cpus();
+            let load = System::load_average();
+
+            // Windows reports zeroes here rather than failing, which would look
+            // like an idle machine instead of an unsupported metric.
+            let load_average = if cfg!(target_os = "windows") {
+                Value::Null
+            } else {
+                json!([load.one, load.five, load.fifteen])
+            };
+
+            let mut seen = std::collections::HashSet::new();
+            let disk_list = Disks::new_with_refreshed_list();
+            let disks: Vec<Value> = disk_list
+                .list()
+                .iter()
+                .filter(|d| d.total_space() > 0)
+                .filter(|d| seen.insert(d.mount_point().to_path_buf()))
+                .map(|d| {
+                    json!({
+                        "mount_point": d.mount_point().to_string_lossy(),
+                        "file_system": d.file_system().to_string_lossy(),
+                        "total": d.total_space(),
+                        "available": d.available_space(),
+                    })
+                })
+                .collect();
+
+            json!({
+                "cpu": {
+                    "usage": sys.global_cpu_usage(),
+                    "cores": cpus.len(),
+                    "brand": cpus.first().map(|c| c.brand().to_string()).unwrap_or_default(),
+                    "load_average": load_average,
+                },
+                "memory": {
+                    "total": sys.total_memory(),
+                    "used": sys.used_memory(),
+                    "swap_total": sys.total_swap(),
+                    "swap_used": sys.used_swap(),
+                },
+                "disks": disks,
+            })
+        })
+        .await
+        .map_err(|e| format!("System info task failed: {e}"))
     }
 
     #[tauri::command]
@@ -632,6 +1104,8 @@ pub fn run() {
             plugin_commands::get_plugin_js,
             plugin_commands::plugin_read_file,
             plugin_commands::plugin_write_file,
+            plugin_commands::plugin_search_files,
+            plugin_commands::plugin_system_info,
             plugin_commands::get_active_window,
             plugin_commands::capture_region,
             plugin_commands::type_text,
