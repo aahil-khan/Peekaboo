@@ -330,8 +330,32 @@ mod plugin_commands {
         Some(PathBuf::from(home).join(".config").join("peekaboo").join("plugins"))
     }
 
+    /// The plugin API revision this build speaks. Bump it when a change to the
+    /// manifest schema or the ctx object would break a plugin written against
+    /// the old one; additive changes do not need it.
+    const SUPPORTED_API_VERSION: u64 = 1;
+
     fn manifest_id(value: &Value) -> Option<String> {
         value.get("plugin")?.get("id")?.as_str().map(str::to_owned)
+    }
+
+    /// Reject a manifest this build cannot honour.
+    ///
+    /// Every manifest already declared `api_version` and nothing read it, so a
+    /// plugin written for a future revision would load anyway and fail somewhere
+    /// deep in a hook. Refusing at discovery is a diagnosable error instead.
+    fn api_version_error(value: &Value) -> Option<String> {
+        let id = manifest_id(value).unwrap_or_else(|| "<unnamed>".into());
+        match value.get("api_version").and_then(Value::as_u64) {
+            Some(v) if v == SUPPORTED_API_VERSION => None,
+            Some(v) if v > SUPPORTED_API_VERSION => Some(format!(
+                "{id} needs plugin API v{v}; this build of Peekaboo speaks v{SUPPORTED_API_VERSION}"
+            )),
+            Some(v) => Some(format!(
+                "{id} targets plugin API v{v}, which this build no longer supports (v{SUPPORTED_API_VERSION})"
+            )),
+            None => Some(format!("{id} has no api_version in its plugin.toml")),
+        }
     }
 
     /// Record where a manifest came from, so Settings can tell a bundled plugin
@@ -384,6 +408,16 @@ mod plugin_commands {
                         continue;
                     };
                     tag_builtin(&mut value, false);
+                    // Kept rather than dropped, so Settings can say why it is
+                    // not running. A plugin that vanishes silently is a support
+                    // question; one that explains itself is not.
+                    if let Some(reason) = api_version_error(&value) {
+                        if let Some(plugin) = value.get_mut("plugin").and_then(Value::as_object_mut)
+                        {
+                            plugin.insert("unsupported".into(), json!(true));
+                            plugin.insert("error".into(), json!(reason));
+                        }
+                    }
                     if let Some(id) = manifest_id(&value) {
                         by_id.insert(id, value);
                     }
@@ -558,7 +592,13 @@ mod plugin_commands {
         fn every_bundled_plugin_is_embedded_and_parses() {
             let ids: Vec<String> = builtin_manifests().iter().filter_map(manifest_id).collect();
 
-            for expected in ["resources", "clipboard", "file", "selection-capture"] {
+            for expected in [
+                "resources",
+                "clipboard",
+                "file",
+                "selection-capture",
+                "openai-compatible",
+            ] {
                 assert!(ids.contains(&expected.to_string()), "missing built-in: {expected}\nfound: {ids:?}");
             }
         }
@@ -587,6 +627,37 @@ mod plugin_commands {
                 println!("searchFiles({query:?}): {} hits in {elapsed:?} (budget 800ms)", hits.len());
                 assert!(elapsed.as_millis() < 800, "{query:?} exceeded its budget: {elapsed:?}");
             }
+        }
+
+        #[test]
+        fn bundled_plugins_declare_a_supported_api_version() {
+            for manifest in builtin_manifests() {
+                assert_eq!(
+                    super::api_version_error(&manifest),
+                    None,
+                    "a bundled plugin must never ship an api_version this build rejects"
+                );
+            }
+        }
+
+        #[test]
+        fn api_version_rejects_future_missing_and_retired_revisions() {
+            use serde_json::json;
+            let manifest = |v: serde_json::Value| json!({ "api_version": v, "plugin": { "id": "x" } });
+
+            assert!(super::api_version_error(&manifest(json!(99)))
+                .unwrap()
+                .contains("this build of Peekaboo speaks"));
+            assert!(super::api_version_error(&manifest(json!(0)))
+                .unwrap()
+                .contains("no longer supports"));
+            assert!(super::api_version_error(&json!({ "plugin": { "id": "x" } }))
+                .unwrap()
+                .contains("no api_version"));
+            assert_eq!(
+                super::api_version_error(&manifest(json!(super::SUPPORTED_API_VERSION))),
+                None
+            );
         }
 
         #[test]

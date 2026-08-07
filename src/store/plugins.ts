@@ -7,7 +7,9 @@ interface PluginsState {
   enabledInputPlugins: string[];
   enabledOutputPlugins: string[];
   manifests: PluginManifest[];
-  
+  /** Discovered but refused for an unsupported api_version. Display only. */
+  incompatible: PluginManifest[];
+
   // Actions
   toggleInputPlugin: (id: string, enabled: boolean) => void;
   toggleOutputPlugin: (id: string, enabled: boolean) => void;
@@ -20,6 +22,7 @@ export const usePluginsStore = create<PluginsState>()(
       enabledInputPlugins: [],
       enabledOutputPlugins: [],
       manifests: [],
+      incompatible: [],
 
       toggleInputPlugin: (id, enabled) => {
         set((state) => ({
@@ -39,7 +42,10 @@ export const usePluginsStore = create<PluginsState>()(
 
       refreshManifests: async () => {
         await registry.discover(true);
-        set({ manifests: registry.getManifests() });
+        set({
+          manifests: registry.getManifests(),
+          incompatible: registry.getIncompatible(),
+        });
       }
     }),
     {

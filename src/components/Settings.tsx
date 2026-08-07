@@ -45,7 +45,7 @@ export const Settings: React.FC = () => {
 
   const { status: serverStatus, launch, stop, activeProfile } = useLlamaServer();
   const {
-    manifests, refreshManifests,
+    manifests, incompatible, refreshManifests,
     enabledInputPlugins, toggleInputPlugin,
     enabledOutputPlugins, toggleOutputPlugin,
   } = usePluginsStore();
@@ -510,6 +510,30 @@ export const Settings: React.FC = () => {
                 })
               )}
             </div>
+
+            {incompatible.length > 0 && (
+              <div className="peek-settings-card">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Not loaded</span>
+                  <span className="peek-settings-desc">
+                    Found in your plugins folder but written against a different version of
+                    the plugin API, so Peekaboo will not run them.
+                  </span>
+                </span>
+
+                {incompatible.map((m) => (
+                  <React.Fragment key={m.plugin.id}>
+                    <div className="peek-settings-divider" />
+                    <div className="peek-settings-row">
+                      <span className="peek-settings-rowtext">
+                        <span className="peek-settings-label">{m.plugin.name || m.plugin.id}</span>
+                        <span className="peek-settings-desc peek-tone-warn">{m.plugin.error}</span>
+                      </span>
+                    </div>
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
           </>
         )}
 

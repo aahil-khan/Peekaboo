@@ -63,6 +63,14 @@ surface a "nothing found" or error state.
 
 **`model`** — provides an `async *stream(messages, options)` generator that
 yields text chunks, making a new backend selectable in the model switcher.
+`options` is your manifest's `[settings]` table. See `openai-compatible/` for a
+working one; copy its SSE buffering rather than reinventing it.
+
+## `api_version`
+
+Checked at discovery. A manifest declaring a version this build does not
+support is not loaded, and appears in Settings under "Not loaded" with the
+reason — it is refused visibly rather than dropped. The current version is `1`.
 
 ## Time limits
 

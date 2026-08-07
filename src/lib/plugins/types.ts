@@ -7,6 +7,10 @@ export interface PluginManifest {
     type: 'input' | 'output' | 'model' | 'context';
     /** Set by the backend: true for a plugin compiled into the app. */
     builtin?: boolean;
+    /** Set by the backend when api_version is one this build cannot honour. */
+    unsupported?: boolean;
+    /** Why it was rejected. Shown in Settings; present with `unsupported`. */
+    error?: string;
   };
   context?: {
     command: string;

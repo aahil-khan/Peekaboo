@@ -4,18 +4,28 @@ import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, 
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
+  private incompatible: PluginManifest[] = [];
   private manifestsLoaded = false;
 
   async discover(force = false) {
     if (this.manifestsLoaded && !force) return;
     if (force) {
       this.plugins.clear();
+      this.incompatible = [];
     }
     try {
       const manifests = await invoke<PluginManifest[]>('discover_plugins');
       for (const manifest of manifests) {
         if (!manifest.plugin || !manifest.plugin.id || !manifest.plugin.type) continue;
-        
+
+        // Held aside rather than registered: it must not appear in the / menu
+        // or run on the send path, but Settings still shows it with the reason
+        // so an incompatible plugin does not simply vanish.
+        if (manifest.plugin.unsupported) {
+          this.incompatible.push(manifest);
+          continue;
+        }
+
         this.plugins.set(manifest.plugin.id, {
           manifest,
           loaded: false
@@ -29,6 +39,11 @@ export class PluginRegistry {
 
   getManifests(): PluginManifest[] {
     return Array.from(this.plugins.values()).map(p => p.manifest);
+  }
+
+  /** Discovered but refused — wrong plugin API version. Display only. */
+  getIncompatible(): PluginManifest[] {
+    return [...this.incompatible];
   }
 
   async loadPlugin(id: string): Promise<void> {
