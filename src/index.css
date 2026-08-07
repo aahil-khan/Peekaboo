@@ -1,33 +1,162 @@
 @import "tailwindcss";
 
-/* ─── Design Tokens ─────────────────────────────────────────────────── */
+/*
+ * Tailwind's `dark:` variant defaults to prefers-color-scheme. Peekaboo drives
+ * its theme from a data attribute so the in-app switcher can override the OS,
+ * so point the variant at that instead. (No Tailwind colour utilities are used
+ * today; this keeps any future ones consistent with the token system.)
+ */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ═══ Scales ════════════════════════════════════════════════════════════
+ *
+ * Mode-independent. Every padding, gap, font-size and radius in the app
+ * resolves to one of these — if a value here doesn't fit, the design is
+ * wrong, not the scale.
+ */
 
 :root {
+  /* Spacing */
+  --peek-space-1: 4px;
+  --peek-space-2: 8px;
+  --peek-space-3: 12px;
+  --peek-space-4: 16px;
+  --peek-space-5: 24px;
+  --peek-space-6: 32px;
+
+  /* Type */
+  --peek-text-xs: 11px;
+  --peek-text-sm: 12px;
+  --peek-text-base: 13px;
+  --peek-text-md: 14px;
+  --peek-text-lg: 15px;
+  --peek-text-xl: 20px;
+
+  --peek-leading-tight: 1.4;
+  --peek-leading: 1.55;
+  --peek-leading-relaxed: 1.65;
+
+  /* Radii */
+  --peek-radius-xs: 4px;
+  --peek-radius-sm: 6px;
+  --peek-radius-md: 10px;
+  --peek-radius-lg: 16px;
+
+  /* Geometry.
+   * --peek-transcript-max is coupled to .peek-surface's max-height and to the
+   * clamp in PeekSurface.tsx's ResizeObserver. All three must agree, or the
+   * transcript silently clips instead of scrolling. See Transcript.tsx. */
+  --peek-transcript-max: 430px;
+  --peek-footer-h: 34px;
+
+  /* Fonts */
+  --peek-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --peek-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ═══ Accents ═══════════════════════════════════════════════════════════
+ *
+ * Each accent declares two channels — one tuned for dark surfaces, one for
+ * light — and the theme block below picks which is live. Everything tinted
+ * derives from --peek-accent-rgb, so adding an accent is a single line.
+ */
+
+/* Indigo doubles as the :root default so the palette resolves even if the
+   pre-paint script never ran. Later blocks win by source order. */
+:root,
+[data-accent='indigo']  { --peek-accent-d: 129, 140, 248; --peek-accent-l:  79,  70, 229; }
+[data-accent='emerald'] { --peek-accent-d:  52, 211, 153; --peek-accent-l:   5, 150, 105; }
+[data-accent='amber']   { --peek-accent-d: 251, 191,  36; --peek-accent-l: 180,  83,   9; }
+[data-accent='rose']    { --peek-accent-d: 251, 113, 133; --peek-accent-l: 225,  29,  72; }
+
+/* ═══ Dark theme ════════════════════════════════════════════════════════ */
+
+/* Dark is the base palette, not an opt-in: it applies with no attribute set.
+   [data-theme='light'] overrides it later in the file by source order. */
+:root,
+[data-theme='dark'] {
+  --peek-accent-rgb: var(--peek-accent-d);
+
+  /* Surfaces */
   --peek-bg: rgba(24, 24, 27, 0.92);
   --peek-bg-solid: #18181b;
+  --peek-panel-bg: var(--peek-bg);
+  --peek-surface-1: rgba(255, 255, 255, 0.02);
+  --peek-surface-2: rgba(255, 255, 255, 0.05);
+  --peek-surface-3: rgba(255, 255, 255, 0.08);
+  --peek-hover: rgba(255, 255, 255, 0.04);
+  --peek-active: rgba(255, 255, 255, 0.07);
+  --peek-elevated: rgba(32, 32, 36, 0.94);
+  --peek-elevated-hi: rgba(22, 22, 25, 0.97);
+  --peek-elevated-hover: rgba(52, 52, 58, 0.96);
+  --peek-input-bg: rgba(0, 0, 0, 0.2);
+  --peek-input-bg-hi: rgba(0, 0, 0, 0.3);
+  --peek-badge-bg: rgba(255, 255, 255, 0.04);
+  --peek-kbd-bg: rgba(255, 255, 255, 0.06);
+  --peek-code-bg: rgba(255, 255, 255, 0.06);
+  --peek-code-block-bg: rgba(0, 0, 0, 0.3);
+  --peek-code-header-bg: rgba(0, 0, 0, 0.25);
+  --peek-scrim: rgba(0, 0, 0, 0.45);
+  --peek-toggle-off: rgba(255, 255, 255, 0.12);
+  --peek-toggle-knob: #ffffff;
+
+  /* Lines */
   --peek-border: rgba(255, 255, 255, 0.08);
+  --peek-border-subtle: rgba(255, 255, 255, 0.1);
   --peek-border-focus: rgba(255, 255, 255, 0.15);
+  --peek-border-strong: rgba(255, 255, 255, 0.22);
+  --peek-divider: rgba(255, 255, 255, 0.05);
+
+  /* Text */
   --peek-text: #fafafa;
   --peek-text-secondary: #a1a1aa;
   --peek-text-muted: #71717a;
-  --peek-accent: #818cf8;
-  --peek-accent-dim: rgba(129, 140, 248, 0.15);
-  --peek-error: #f87171;
+  --peek-text-inverse: #18181b;
+
+  /* Status.
+   * Deliberately drawn from the same Tailwind ramp as the rest of the
+   * palette — the old Material greens/reds/oranges clashed with the
+   * zinc + indigo surfaces they sat on. */
   --peek-success: #34d399;
-  --peek-code-bg: rgba(255, 255, 255, 0.06);
-  --peek-hover: rgba(255, 255, 255, 0.04);
-  --peek-radius: 16px;
-  --peek-radius-sm: 8px;
+  --peek-success-soft: rgba(52, 211, 153, 0.14);
+  --peek-success-line: rgba(52, 211, 153, 0.3);
+  --peek-error: #f87171;
+  --peek-error-soft: rgba(248, 113, 113, 0.14);
+  --peek-error-line: rgba(248, 113, 113, 0.3);
+  --peek-warning: #fbbf24;
+  --peek-warning-soft: rgba(251, 191, 36, 0.14);
+  --peek-warning-line: rgba(251, 191, 36, 0.3);
+  --peek-pin: #fbbf24;
+
+  /* Chrome */
+  --peek-scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --peek-scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --peek-backdrop: blur(24px) saturate(1.5);
   --peek-shadow:
     0 0 0 1px var(--peek-border),
     0 8px 40px rgba(0, 0, 0, 0.5),
     0 2px 8px rgba(0, 0, 0, 0.3),
     inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
-  --peek-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  --peek-font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --peek-shadow-pop: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --peek-shadow-menu: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --peek-shadow-modal:
+    0 20px 25px -5px rgba(0, 0, 0, 0.35),
+    0 10px 10px -5px rgba(0, 0, 0, 0.25);
 }
 
-/* ─── Base Reset ────────────────────────────────────────────────────── */
+/* Derived accent tints — identical in both themes, resolved from the channel. */
+:root,
+[data-theme] {
+  --peek-accent: rgb(var(--peek-accent-rgb));
+  --peek-accent-soft: rgba(var(--peek-accent-rgb), 0.1);
+  --peek-accent-soft-hover: rgba(var(--peek-accent-rgb), 0.16);
+  --peek-accent-dim: rgba(var(--peek-accent-rgb), 0.15);
+  --peek-accent-line: rgba(var(--peek-accent-rgb), 0.2);
+  --peek-accent-line-strong: rgba(var(--peek-accent-rgb), 0.35);
+  --peek-accent-contrast: #ffffff;
+}
+
+/* ═══ Base Reset ════════════════════════════════════════════════════════ */
 
 *,
 *::before,
@@ -43,7 +172,7 @@ html, body, #root {
   background: transparent;
   overflow: hidden;
   font-family: var(--peek-font);
-  font-size: 14px;
+  font-size: var(--peek-text-md);
   color: var(--peek-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -75,22 +204,170 @@ html[data-window='setup'] body {
  * renders the transparent overlay without a rectangular edge showing through.
  */
 html[data-window='peek'] {
-  border-radius: var(--peek-radius);
+  border-radius: var(--peek-radius-lg);
 }
 
-/* ─── Peek Surface ──────────────────────────────────────────────────── */
+/* ═══ Shared Controls ═══════════════════════════════════════════════════ */
+
+/*
+ * The canonical icon button: footer actions, panel close buttons, row
+ * actions. Hover and focus live here rather than in JS mouse handlers so
+ * keyboard users get the same affordance, and so the style survives a
+ * re-render mid-hover (inline-style hover state does not).
+ */
+.peek-icon-btn,
+.peek-scroll-bottom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-icon-btn:hover:not(:disabled) {
+  color: var(--peek-text);
+  background: var(--peek-hover);
+}
+
+.peek-icon-btn:focus-visible,
+.peek-scroll-bottom-btn:focus-visible {
+  outline: none;
+  color: var(--peek-text);
+  border-color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+}
+
+.peek-icon-btn:active:not(:disabled) {
+  background: var(--peek-active);
+}
+
+.peek-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/*
+ * Outlined variant, for small labelled or square actions. The named component
+ * classes are listed here rather than composed in markup so each stays a
+ * single class at the call site.
+ */
+.peek-ghost-btn,
+.peek-copy-response-btn,
+.peek-code-copy-btn,
+.peek-nav-btn,
+.peek-history-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--peek-space-1);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.peek-ghost-btn:hover:not(:disabled),
+.peek-copy-response-btn:hover:not(:disabled),
+.peek-code-copy-btn:hover:not(:disabled),
+.peek-nav-btn:hover:not(:disabled),
+.peek-history-action-btn:hover:not(:disabled) {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+  background: var(--peek-hover);
+}
+
+.peek-ghost-btn:focus-visible,
+.peek-copy-response-btn:focus-visible,
+.peek-code-copy-btn:focus-visible,
+.peek-nav-btn:focus-visible,
+.peek-history-action-btn:focus-visible {
+  outline: none;
+  border-color: var(--peek-accent);
+  color: var(--peek-text);
+}
+
+.peek-ghost-btn:disabled,
+.peek-nav-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/*
+ * Shared thin-scrollbar treatment. Applied by selector group for the same
+ * reason as the buttons above — these elements each carry one class.
+ */
+.peek-scroll,
+.peek-transcript,
+.peek-exchange-card,
+.peek-exchange-assistant,
+.peek-table-wrapper,
+.peek-code-block,
+.peek-history-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--peek-scrollbar-thumb) transparent;
+}
+
+.peek-scroll::-webkit-scrollbar,
+.peek-transcript::-webkit-scrollbar,
+.peek-exchange-card::-webkit-scrollbar,
+.peek-exchange-assistant::-webkit-scrollbar,
+.peek-table-wrapper::-webkit-scrollbar,
+.peek-code-block::-webkit-scrollbar,
+.peek-history-list::-webkit-scrollbar { width: 4px; height: 4px; }
+
+.peek-scroll::-webkit-scrollbar-track,
+.peek-transcript::-webkit-scrollbar-track,
+.peek-exchange-card::-webkit-scrollbar-track,
+.peek-exchange-assistant::-webkit-scrollbar-track,
+.peek-table-wrapper::-webkit-scrollbar-track,
+.peek-code-block::-webkit-scrollbar-track,
+.peek-history-list::-webkit-scrollbar-track { background: transparent; }
+
+.peek-scroll::-webkit-scrollbar-thumb,
+.peek-transcript::-webkit-scrollbar-thumb,
+.peek-exchange-card::-webkit-scrollbar-thumb,
+.peek-exchange-assistant::-webkit-scrollbar-thumb,
+.peek-table-wrapper::-webkit-scrollbar-thumb,
+.peek-code-block::-webkit-scrollbar-thumb,
+.peek-history-list::-webkit-scrollbar-thumb {
+  background: var(--peek-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+.peek-scroll::-webkit-scrollbar-thumb:hover,
+.peek-transcript::-webkit-scrollbar-thumb:hover,
+.peek-exchange-card::-webkit-scrollbar-thumb:hover,
+.peek-exchange-assistant::-webkit-scrollbar-thumb:hover,
+.peek-table-wrapper::-webkit-scrollbar-thumb:hover,
+.peek-code-block::-webkit-scrollbar-thumb:hover,
+.peek-history-list::-webkit-scrollbar-thumb:hover {
+  background: var(--peek-scrollbar-thumb-hover);
+}
+
+/* ═══ Peek Surface ══════════════════════════════════════════════════════ */
 
 .peek-surface {
   display: flex;
   flex-direction: column;
   width: 660px;
+  /* Coupled to --peek-transcript-max and the clamp in PeekSurface.tsx. */
   max-height: 518px;
   background: var(--peek-bg);
-  border-radius: var(--peek-radius);
+  border-radius: var(--peek-radius-lg);
   box-shadow: var(--peek-shadow);
   overflow: hidden;
-  backdrop-filter: blur(24px) saturate(1.5);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  backdrop-filter: var(--peek-backdrop);
+  -webkit-backdrop-filter: var(--peek-backdrop);
   position: relative;
 }
 
@@ -100,13 +377,13 @@ html[data-window='peek'] {
   min-height: 0;
 }
 
-/* ─── Input ─────────────────────────────────────────────────────────── */
+/* ═══ Input ═════════════════════════════════════════════════════════════ */
 
 .peek-input-container {
   display: flex;
   align-items: flex-start;
-  padding: 14px 16px;
-  gap: 12px;
+  padding: var(--peek-space-3) var(--peek-space-4);
+  gap: var(--peek-space-3);
   border-bottom: 1px solid var(--peek-border);
 }
 
@@ -128,9 +405,9 @@ html[data-window='peek'] {
   outline: none;
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 15px;
+  font-size: var(--peek-text-lg);
   font-weight: 400;
-  line-height: 1.5;
+  line-height: var(--peek-leading);
   resize: none;
   caret-color: var(--peek-accent);
   overflow: hidden;
@@ -147,15 +424,7 @@ html[data-window='peek'] {
 
 .peek-input-status {
   flex-shrink: 0;
-  margin-top: 4px;
-}
-
-.peek-streaming-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--peek-accent);
-  animation: peek-pulse 1.5s ease-in-out infinite;
+  margin-top: var(--peek-space-1);
 }
 
 .peek-input-hint {
@@ -170,34 +439,98 @@ html[data-window='peek'] {
   height: 22px;
   min-width: 22px;
   padding: 0 6px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-kbd-bg);
+  border: 1px solid var(--peek-border-subtle);
   color: var(--peek-text-muted);
   font-family: var(--peek-font);
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   font-weight: 500;
 }
 
-/* ─── Attachment Chips ──────────────────────────────────────────────── */
+/* ═══ Slash Command Menu ════════════════════════════════════════════════ */
+
+.peek-slash-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: var(--peek-space-2);
+  background: var(--peek-elevated);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-md);
+  box-shadow: var(--peek-shadow-menu);
+  overflow: hidden;
+  z-index: 10;
+  backdrop-filter: var(--peek-backdrop);
+  -webkit-backdrop-filter: var(--peek-backdrop);
+}
+
+.peek-slash-empty {
+  padding: var(--peek-space-2) var(--peek-space-3);
+  color: var(--peek-text-muted);
+  font-size: var(--peek-text-base);
+}
+
+.peek-slash-group {
+  padding: var(--peek-space-2) var(--peek-space-3) var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--peek-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.peek-slash-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: var(--peek-space-2) var(--peek-space-3);
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-md);
+}
+
+.peek-slash-item:hover {
+  background: var(--peek-hover);
+}
+
+.peek-slash-item[aria-selected='true'] {
+  background: var(--peek-accent-soft);
+}
+
+.peek-slash-item-title {
+  font-weight: 500;
+}
+
+.peek-slash-item-subtitle {
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+}
+
+/* ═══ Attachment Chips ══════════════════════════════════════════════════ */
 
 .peek-attachments {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 4px 16px 10px;
+  padding: var(--peek-space-1) var(--peek-space-4) var(--peek-space-2);
 }
 
 .peek-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px 3px 6px;
-  border-radius: 6px;
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  padding: 3px var(--peek-space-2) 3px 6px;
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-accent-soft);
+  border: 1px solid var(--peek-accent-line);
   color: var(--peek-text-secondary);
-  font-size: 12px;
+  font-size: var(--peek-text-sm);
   font-weight: 500;
   max-width: 220px;
   user-select: none;
@@ -209,19 +542,19 @@ html[data-window='peek'] {
 }
 
 .peek-chip.peek-clickable:hover {
-  background: rgba(129, 140, 248, 0.16);
+  background: var(--peek-accent-soft-hover);
   color: var(--peek-text);
-  border-color: rgba(129, 140, 248, 0.35);
+  border-color: var(--peek-accent-line-strong);
   transform: translateY(-0.5px);
 }
 
 .peek-chip.peek-clickable:active {
   transform: translateY(0.5px);
-  background: rgba(129, 140, 248, 0.12);
+  background: var(--peek-accent-dim);
 }
 
 .peek-chip-icon {
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   line-height: 1;
   opacity: 0.7;
   flex-shrink: 0;
@@ -242,7 +575,7 @@ html[data-window='peek'] {
   border: none;
   background: transparent;
   color: var(--peek-text-muted);
-  font-size: 14px;
+  font-size: var(--peek-text-md);
   line-height: 1;
   cursor: pointer;
   border-radius: 3px;
@@ -253,16 +586,17 @@ html[data-window='peek'] {
 
 .peek-chip-remove:hover {
   color: var(--peek-text);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--peek-surface-3);
 }
 
-/* ─── Status Bar ────────────────────────────────────────────────────── */
+/* ═══ Status Bar ════════════════════════════════════════════════════════ */
 
 .peek-statusbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 16px;
+  gap: var(--peek-space-2);
+  padding: 6px var(--peek-space-4);
   min-height: 28px;
 }
 
@@ -270,21 +604,22 @@ html[data-window='peek'] {
 .peek-status-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--peek-space-2);
+  min-width: 0;
 }
 
 .peek-status-model {
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   font-weight: 500;
   color: var(--peek-text-muted);
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.04);
+  padding: 2px var(--peek-space-2);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-badge-bg);
   letter-spacing: 0.01em;
 }
 
 .peek-status-error {
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-error);
   font-weight: 500;
 }
@@ -293,20 +628,12 @@ html[data-window='peek'] {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-accent);
   font-weight: 500;
 }
 
-.peek-bg-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--peek-accent);
-  animation: peek-pulse 2s ease-in-out infinite;
-}
-
-/* ─── Exchange View (Paged) ─────────────────────────────────────────── */
+/* ═══ Exchange View (paged — superseded by the transcript) ══════════════ */
 
 .peek-exchange-view {
   display: flex;
@@ -316,39 +643,29 @@ html[data-window='peek'] {
 }
 
 .peek-exchange-card {
-  padding: 12px 16px 4px;
+  padding: var(--peek-space-3) var(--peek-space-4) var(--peek-space-1);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--peek-space-2);
   max-height: 380px;
   max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
-.peek-exchange-card::-webkit-scrollbar { width: 4px; }
-.peek-exchange-card::-webkit-scrollbar-track { background: transparent; }
-.peek-exchange-card::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-
-/* User question bubble */
 .peek-exchange-user {
   display: flex;
   justify-content: flex-end;
 }
 
 .peek-exchange-user-bubble {
-  background: rgba(129, 140, 248, 0.1);
-  border: 1px solid rgba(129, 140, 248, 0.18);
+  background: var(--peek-accent-soft);
+  border: 1px solid var(--peek-accent-line);
   color: var(--peek-text-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 6px 12px;
-  border-radius: 14px 14px 4px 14px;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading);
+  padding: 6px var(--peek-space-3);
+  border-radius: var(--peek-radius-lg) var(--peek-radius-lg) var(--peek-radius-xs) var(--peek-radius-lg);
   max-width: 100%;
   word-break: break-word;
   user-select: text;
@@ -356,10 +673,9 @@ html[data-window='peek'] {
   white-space: pre-wrap;
 }
 
-/* Assistant response */
 .peek-exchange-assistant {
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading-relaxed);
   color: var(--peek-text);
   user-select: text;
   width: 100%;
@@ -367,105 +683,25 @@ html[data-window='peek'] {
   min-width: 0;
   overflow-x: auto;
   overflow-wrap: break-word;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-.peek-exchange-assistant::-webkit-scrollbar {
-  height: 4px;
-}
-.peek-exchange-assistant::-webkit-scrollbar-track {
-  background: transparent;
-}
-.peek-exchange-assistant::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
 }
 
-/* Markdown in exchange */
-.peek-exchange-assistant p { margin-bottom: 0.75em; }
-.peek-exchange-assistant p:last-child { margin-bottom: 0; }
-.peek-exchange-assistant h1, .peek-exchange-assistant h2, .peek-exchange-assistant h3 {
-  font-weight: 600; margin: 1em 0 0.5em;
-}
-.peek-exchange-assistant h1 { font-size: 1.25em; }
-.peek-exchange-assistant h2 { font-size: 1.1em; }
-.peek-exchange-assistant h3 { font-size: 1em; }
-.peek-exchange-assistant strong { font-weight: 600; }
-.peek-exchange-assistant em { font-style: italic; color: var(--peek-text-secondary); }
-.peek-exchange-assistant ul, .peek-exchange-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
-.peek-exchange-assistant li { margin-bottom: 0.3em; }
-.peek-exchange-assistant blockquote {
-  border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
-  color: var(--peek-text-secondary);
-  margin: 0.75em 0;
-}
-.peek-table-wrapper {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-.peek-table-wrapper::-webkit-scrollbar {
-  height: 4px;
-}
-.peek-table-wrapper::-webkit-scrollbar-track {
-  background: transparent;
-}
-.peek-table-wrapper::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-}
-.peek-table-wrapper::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.peek-exchange-assistant table { 
-  width: 100%; 
-  border-collapse: collapse; 
-  margin: 0; 
-  font-size: 13px; 
-  table-layout: auto;
-}
-.peek-exchange-assistant th, .peek-exchange-assistant td { padding: 6px 10px; border: 1px solid var(--peek-border); }
-.peek-exchange-assistant th { background: rgba(255,255,255,0.04); font-weight: 600; }
-
-/* Exchange navigation bar */
 .peek-exchange-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 6px 16px 8px;
+  gap: var(--peek-space-2);
+  padding: 6px var(--peek-space-4) var(--peek-space-2);
   border-top: 1px solid var(--peek-border);
 }
 
 .peek-nav-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   width: 24px;
   height: 24px;
-  border: 1px solid var(--peek-border);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  flex-shrink: 0;
-}
-
-.peek-nav-btn:hover:not(:disabled) {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.peek-nav-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
+  border-color: var(--peek-border);
 }
 
 .peek-exchange-counter {
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
   font-variant-numeric: tabular-nums;
   min-width: 36px;
@@ -473,110 +709,43 @@ html[data-window='peek'] {
   letter-spacing: 0.03em;
 }
 
-/* Status bar breadcrumb */
-.peek-exchange-breadcrumb {
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  padding: 1px 7px;
-  font-variant-numeric: tabular-nums;
+/* ═══ Transcript ════════════════════════════════════════════════════════ */
+
+/*
+ * The scroller. An explicit max-height (rather than flex:1) is essential: the
+ * surface must still shrink to fit a short conversation, but must never grow
+ * past what the window clamp allows — .peek-surface is overflow:hidden, so an
+ * unbounded transcript would clip rather than scroll.
+ */
+.peek-transcript {
+  max-height: var(--peek-transcript-max);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--peek-space-3) var(--peek-space-4) var(--peek-space-1);
+  outline: none;
 }
 
-/* Copy response button */
-.peek-copy-response-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 3px 8px;
-  border: 1px solid var(--peek-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  user-select: none;
-  align-self: flex-start;
-  width: max-content;
-}
-
-.peek-copy-response-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-/* Code block with header */
-.peek-code-block-wrapper {
-  margin: 0.75em 0;
-  border-radius: var(--peek-radius-sm);
-  overflow: hidden;
-  border: 1px solid var(--peek-border);
-}
-
-.peek-code-block-header {
+.peek-transcript-wrap {
+  position: relative;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.25);
-  border-bottom: 1px solid var(--peek-border);
+  flex-direction: column;
+  min-height: 0;
 }
 
-.peek-code-lang {
-  font-family: var(--peek-font-mono);
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  text-transform: lowercase;
-}
-
-.peek-code-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 7px;
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease;
-  user-select: none;
-}
-
-.peek-code-copy-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-}
-
-.peek-code-block-wrapper .peek-code-block {
-  border: none;
-  border-radius: 0;
-  margin: 0;
-}
-
-
-
-/* Exchange = one user+assistant pair */
+/* One user + assistant pair. */
 .peek-thread-exchange {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--peek-border);
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-3) 0;
+  border-bottom: 1px solid var(--peek-divider);
+  animation: peek-fade-in 0.18s ease-out;
 }
 
-.peek-thread-exchange:first-child {
-  border-top: 1px solid var(--peek-border);
+.peek-thread-exchange:last-child {
+  border-bottom: none;
 }
 
-/* User message bubble */
 .peek-thread-user {
   display: flex;
   flex-direction: column;
@@ -587,17 +756,17 @@ html[data-window='peek'] {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--peek-space-1);
   margin-bottom: 6px;
 }
 
 .peek-user-context-chip {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--peek-surface-2);
   border: 1px solid var(--peek-border);
   color: var(--peek-text-muted);
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 6px;
+  font-size: var(--peek-text-xs);
+  padding: 3px var(--peek-space-2);
+  border-radius: var(--peek-radius-sm);
   max-width: 250px;
   white-space: nowrap;
   overflow: hidden;
@@ -611,87 +780,207 @@ html[data-window='peek'] {
 }
 
 .peek-user-context-chip.peek-clickable:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--peek-surface-3);
   color: var(--peek-text-secondary);
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: var(--peek-border-strong);
   transform: translateY(-0.5px);
 }
 
 .peek-user-context-chip.peek-clickable:active {
   transform: translateY(0.5px);
-  background: rgba(255, 255, 255, 0.07);
+  background: var(--peek-active);
 }
 
 .peek-thread-user-bubble {
-  background: rgba(129, 140, 248, 0.12);
-  border: 1px solid rgba(129, 140, 248, 0.2);
+  background: var(--peek-accent-dim);
+  border: 1px solid var(--peek-accent-line);
   color: var(--peek-text);
-  font-size: 13.5px;
-  line-height: 1.55;
-  padding: 7px 12px;
-  border-radius: 14px 14px 4px 14px;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading);
+  padding: 7px var(--peek-space-3);
+  border-radius: var(--peek-radius-lg) var(--peek-radius-lg) var(--peek-radius-xs) var(--peek-radius-lg);
   max-width: 85%;
   word-break: break-word;
   user-select: text;
+  white-space: pre-wrap;
 }
 
-/* Assistant message */
 .peek-thread-assistant {
-  font-size: 13.5px;
-  line-height: 1.65;
+  font-size: var(--peek-text-base);
+  line-height: var(--peek-leading-relaxed);
   color: var(--peek-text);
   user-select: text;
   padding-left: 2px;
   position: relative;
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
-/* Markdown in thread */
-.peek-thread-assistant p { margin-bottom: 0.75em; }
-.peek-thread-assistant p:last-child { margin-bottom: 0; }
-.peek-thread-assistant h1, .peek-thread-assistant h2, .peek-thread-assistant h3 {
-  font-weight: 600; margin: 1em 0 0.5em; color: var(--peek-text);
+/* Attached images on a user turn. */
+.peek-turn-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-bottom: 6px;
 }
-.peek-thread-assistant h1 { font-size: 1.25em; }
-.peek-thread-assistant h2 { font-size: 1.1em; }
-.peek-thread-assistant h3 { font-size: 1em; }
-.peek-thread-assistant strong { font-weight: 600; color: var(--peek-text); }
-.peek-thread-assistant em { font-style: italic; color: var(--peek-text-secondary); }
-.peek-thread-assistant ul, .peek-thread-assistant ol { padding-left: 1.5em; margin-bottom: 0.75em; }
-.peek-thread-assistant li { margin-bottom: 0.3em; }
-.peek-thread-assistant blockquote {
+
+.peek-turn-image {
+  width: 96px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--peek-radius-sm);
+  border: 1px solid var(--peek-border);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.peek-turn-image:hover {
+  border-color: var(--peek-border-strong);
+  transform: translateY(-1px);
+}
+
+/* Copy / remember / model row beneath an answer. */
+.peek-turn-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--peek-space-2);
+}
+
+.peek-turn-actions-spacer {
+  flex: 1;
+}
+
+.peek-turn-model {
+  font-size: var(--peek-text-xs);
+  color: var(--peek-text-muted);
+  background: var(--peek-badge-bg);
+  border-radius: var(--peek-radius-xs);
+  padding: 2px 6px;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Jump-to-bottom affordance. */
+.peek-scroll-bottom-btn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: var(--peek-space-2);
+  z-index: 5;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--peek-border-strong);
+  background: var(--peek-elevated);
+  box-shadow: var(--peek-shadow-pop);
+  backdrop-filter: var(--peek-backdrop);
+  -webkit-backdrop-filter: var(--peek-backdrop);
+}
+
+.peek-scroll-bottom-btn:hover:not(:disabled) {
+  background: var(--peek-elevated-hover);
+}
+
+/* ═══ Markdown ══════════════════════════════════════════════════════════
+ *
+ * `.peek-md` is the canonical set. `.peek-exchange-assistant` is listed
+ * alongside it only while the paged view still exists; drop that half of each
+ * selector when ExchangeView.tsx goes away.
+ */
+
+.peek-md p,
+.peek-exchange-assistant p { margin-bottom: 0.75em; }
+
+.peek-md p:last-child,
+.peek-exchange-assistant p:last-child { margin-bottom: 0; }
+
+.peek-md h1, .peek-md h2, .peek-md h3,
+.peek-exchange-assistant h1, .peek-exchange-assistant h2, .peek-exchange-assistant h3 {
+  font-weight: 600;
+  margin: 1em 0 0.5em;
+  color: var(--peek-text);
+}
+
+.peek-md h1, .peek-exchange-assistant h1 { font-size: 1.25em; }
+.peek-md h2, .peek-exchange-assistant h2 { font-size: 1.1em; }
+.peek-md h3, .peek-exchange-assistant h3 { font-size: 1em; }
+
+.peek-md strong,
+.peek-exchange-assistant strong { font-weight: 600; color: var(--peek-text); }
+
+.peek-md em,
+.peek-exchange-assistant em { font-style: italic; color: var(--peek-text-secondary); }
+
+.peek-md ul, .peek-md ol,
+.peek-exchange-assistant ul, .peek-exchange-assistant ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.peek-md li,
+.peek-exchange-assistant li { margin-bottom: 0.3em; }
+
+.peek-md blockquote,
+.peek-exchange-assistant blockquote {
   border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
+  padding-left: var(--peek-space-3);
   color: var(--peek-text-secondary);
   margin: 0.75em 0;
 }
 
-/* Copy response button */
-.peek-copy-response-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  padding: 3px 8px;
+.peek-md table,
+.peek-exchange-assistant table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: var(--peek-text-base);
+  table-layout: auto;
+}
+
+.peek-md th, .peek-md td,
+.peek-exchange-assistant th, .peek-exchange-assistant td {
+  padding: 6px var(--peek-space-2);
   border: 1px solid var(--peek-border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
-  user-select: none;
-  align-self: flex-start;
-  width: max-content;
+  text-align: left;
 }
 
-.peek-copy-response-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.04);
+.peek-md th,
+.peek-exchange-assistant th {
+  background: var(--peek-badge-bg);
+  font-weight: 600;
 }
 
-/* Code block with header */
+/* Inline code */
+.peek-inline-code {
+  font-family: var(--peek-font-mono);
+  font-size: 0.88em;
+  background: var(--peek-code-bg);
+  padding: 1px 6px;
+  border-radius: var(--peek-radius-xs);
+  color: var(--peek-accent);
+}
+
+/* Code blocks */
+.peek-code-block {
+  background: var(--peek-code-block-bg);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  padding: var(--peek-space-3) var(--peek-space-3);
+  margin: 0.75em 0;
+  overflow-x: auto;
+}
+
+.peek-code-block code {
+  font-family: var(--peek-font-mono);
+  font-size: var(--peek-text-sm);
+  line-height: 1.6;
+  color: var(--peek-text-secondary);
+}
+
 .peek-code-block-wrapper {
   margin: 0.75em 0;
   border-radius: var(--peek-radius-sm);
@@ -703,150 +992,35 @@ html[data-window='peek'] {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.25);
+  padding: 5px var(--peek-space-2);
+  background: var(--peek-code-header-bg);
   border-bottom: 1px solid var(--peek-border);
 }
 
 .peek-code-lang {
   font-family: var(--peek-font-mono);
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
   text-transform: lowercase;
 }
 
 .peek-code-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
   padding: 2px 7px;
-  border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  background: transparent;
-  color: var(--peek-text-muted);
-  font-size: 11px;
-  font-family: var(--peek-font);
-  cursor: pointer;
-  transition: color 0.12s ease, border-color 0.12s ease;
-  user-select: none;
+  border-radius: var(--peek-radius-xs);
 }
 
-.peek-code-copy-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-}
-
-/* Override the standalone code block (used inside wrapper) */
+/* Inside a wrapper the block supplies its own border and radius. */
 .peek-code-block-wrapper .peek-code-block {
   border: none;
   border-radius: 0;
   margin: 0;
 }
 
-
-
-
-.peek-response-content {
-  font-size: 13.5px;
-  line-height: 1.65;
-  color: var(--peek-text);
-  user-select: text;
-}
-
-/* Markdown styling */
-.peek-response-content p {
-  margin-bottom: 0.75em;
-}
-
-.peek-response-content p:last-child {
-  margin-bottom: 0;
-}
-
-.peek-response-content h1,
-.peek-response-content h2,
-.peek-response-content h3 {
-  font-weight: 600;
-  margin: 1em 0 0.5em;
-  color: var(--peek-text);
-}
-
-.peek-response-content h1 { font-size: 1.25em; }
-.peek-response-content h2 { font-size: 1.1em; }
-.peek-response-content h3 { font-size: 1em; }
-
-.peek-response-content strong {
-  font-weight: 600;
-  color: var(--peek-text);
-}
-
-.peek-response-content em {
-  font-style: italic;
-  color: var(--peek-text-secondary);
-}
-
-.peek-response-content ul,
-.peek-response-content ol {
-  padding-left: 1.5em;
-  margin-bottom: 0.75em;
-}
-
-.peek-response-content li {
-  margin-bottom: 0.3em;
-}
-
-.peek-response-content blockquote {
-  border-left: 2px solid var(--peek-accent-dim);
-  padding-left: 12px;
-  color: var(--peek-text-secondary);
-  margin: 0.75em 0;
-}
-
-.peek-response-content table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 0.75em 0;
-  font-size: 13px;
-}
-
-.peek-response-content th,
-.peek-response-content td {
-  padding: 6px 10px;
-  border: 1px solid var(--peek-border);
-  text-align: left;
-}
-
-.peek-response-content th {
-  background: rgba(255, 255, 255, 0.04);
-  font-weight: 600;
-}
-
-/* Inline code */
-.peek-inline-code {
-  font-family: var(--peek-font-mono);
-  font-size: 0.88em;
-  background: var(--peek-code-bg);
-  padding: 1px 6px;
-  border-radius: 4px;
-  color: var(--peek-accent);
-}
-
-/* Code blocks */
-.peek-code-block {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--peek-border);
-  border-radius: var(--peek-radius-sm);
-  padding: 12px 14px;
-  margin: 0.75em 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-.peek-code-block code {
-  font-family: var(--peek-font-mono);
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: var(--peek-text-secondary);
+.peek-copy-response-btn {
+  margin-top: var(--peek-space-2);
+  padding: 3px var(--peek-space-2);
+  align-self: flex-start;
+  width: max-content;
 }
 
 /* Links */
@@ -872,12 +1046,12 @@ html[data-window='peek'] {
   vertical-align: text-bottom;
 }
 
-/* Model loading indicator */
+/* Waiting-for-first-token indicator */
 .peek-loading-dots {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 2px;
+  padding: var(--peek-space-1) 2px;
 }
 
 .peek-loading-dots span {
@@ -890,21 +1064,12 @@ html[data-window='peek'] {
   animation: peek-dot-pulse 1.2s ease-in-out infinite;
 }
 
-.peek-loading-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
+.peek-loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+.peek-loading-dots span:nth-child(3) { animation-delay: 0.4s; }
 
-.peek-loading-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
+/* ═══ Overlay Panels ════════════════════════════════════════════════════ */
 
-@keyframes peek-dot-pulse {
-  0%, 80%, 100% { opacity: 0.2; transform: scale(0.85); }
-  40%           { opacity: 1;   transform: scale(1.1); }
-}
-
-/* ─── History Panel ─────────────────────────────────────────────────── */
-
+/* Shared by History, Models, Legend and the Memory overlay. */
 .peek-history {
   position: absolute;
   top: 0;
@@ -913,10 +1078,10 @@ html[data-window='peek'] {
   bottom: 0;
   display: flex;
   flex-direction: column;
-  background: var(--peek-bg);
+  background: var(--peek-panel-bg);
   min-height: 200px;
   z-index: 10;
-  border-radius: var(--peek-radius);
+  border-radius: var(--peek-radius-lg);
   overflow: hidden;
 }
 
@@ -924,12 +1089,12 @@ html[data-window='peek'] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: var(--peek-space-3) var(--peek-space-4);
   border-bottom: 1px solid var(--peek-border);
 }
 
 .peek-history-title {
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   font-weight: 600;
   color: var(--peek-text-secondary);
   text-transform: uppercase;
@@ -942,9 +1107,9 @@ html[data-window='peek'] {
   justify-content: center;
   height: 20px;
   padding: 0 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-kbd-bg);
+  border: 1px solid var(--peek-border);
   color: var(--peek-text-muted);
   font-family: var(--peek-font);
   font-size: 10px;
@@ -952,19 +1117,19 @@ html[data-window='peek'] {
 }
 
 .peek-history-search {
-  padding: 8px 16px;
+  padding: var(--peek-space-2) var(--peek-space-4);
   border-bottom: 1px solid var(--peek-border);
 }
 
 .peek-history-search input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--peek-input-bg);
   border: 1px solid var(--peek-border);
-  border-radius: 4px;
-  padding: 6px 10px;
+  border-radius: var(--peek-radius-xs);
+  padding: 6px var(--peek-space-2);
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 12px;
+  font-size: var(--peek-text-sm);
   outline: none;
   transition: border-color 0.15s ease;
 }
@@ -976,23 +1141,21 @@ html[data-window='peek'] {
 .peek-history-list {
   flex: 1;
   overflow-y: auto;
-  padding: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  padding: var(--peek-space-1);
 }
 
 .peek-history-empty {
-  padding: 24px 16px;
+  padding: var(--peek-space-5) var(--peek-space-4);
   text-align: center;
   color: var(--peek-text-muted);
-  font-size: 13px;
+  font-size: var(--peek-text-base);
 }
 
 .peek-history-item {
   display: flex;
   flex-direction: column;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--peek-space-2) var(--peek-space-3);
   border: none;
   background: transparent;
   border-radius: var(--peek-radius-sm);
@@ -1011,11 +1174,11 @@ html[data-window='peek'] {
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  margin-bottom: 4px;
+  margin-bottom: var(--peek-space-1);
 }
 
 .peek-history-item-title {
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   font-weight: 500;
   color: var(--peek-text);
   overflow: hidden;
@@ -1026,66 +1189,49 @@ html[data-window='peek'] {
 
 .peek-history-item-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--peek-space-1);
   opacity: 0;
   transition: opacity 0.15s ease;
 }
 
-.peek-history-item:hover .peek-history-item-actions {
+.peek-history-item:hover .peek-history-item-actions,
+.peek-history-item:focus-within .peek-history-item-actions {
   opacity: 1;
 }
 
 .peek-history-action-btn {
-  background: transparent;
-  border: 1px solid var(--peek-border);
-  color: var(--peek-text-muted);
+  border-color: var(--peek-border);
   width: 22px;
   height: 22px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.1s ease;
-}
-
-.peek-history-action-btn:hover {
-  color: var(--peek-text);
-  border-color: var(--peek-border-focus);
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--peek-radius-xs);
 }
 
 .peek-history-edit-input {
   width: 100%;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--peek-input-bg-hi);
   border: 1px solid var(--peek-border-focus);
-  border-radius: 4px;
+  border-radius: var(--peek-radius-xs);
   padding: 2px 6px;
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: 13px;
+  font-size: var(--peek-text-base);
   font-weight: 500;
   outline: none;
 }
 
 .peek-history-item-meta {
   display: flex;
-  gap: 8px;
+  gap: var(--peek-space-2);
   align-items: center;
 }
 
-.peek-history-item-model {
-  font-size: 11px;
-  color: var(--peek-text-muted);
-  font-weight: 500;
-}
-
+.peek-history-item-model,
 .peek-history-item-time {
-  font-size: 11px;
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
 }
 
-/* ─── Animations ────────────────────────────────────────────────────── */
+/* ═══ Animations ════════════════════════════════════════════════════════ */
 
 @keyframes peek-pulse {
   0%, 100% { opacity: 1; }
@@ -1098,22 +1244,21 @@ html[data-window='peek'] {
 }
 
 @keyframes peek-dot-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(0.6);
-    opacity: 0.3;
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(0.6); opacity: 0.3; }
 }
 
-/* ─── Reduced Motion ────────────────────────────────────────────────── */
+@keyframes peek-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ═══ Reduced Motion ════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {
-  .peek-streaming-dot,
-  .peek-bg-dot,
-  .peek-cursor {
+  .peek-cursor,
+  .peek-loading-dots span,
+  .peek-thread-exchange {
     animation: none;
   }
 }
