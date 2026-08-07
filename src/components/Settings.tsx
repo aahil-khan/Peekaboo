@@ -34,7 +34,8 @@ export const Settings: React.FC = () => {
     llamaProfiles, deleteLlamaProfile,
     activeLlamaProfileId, setActiveLlamaProfileId,
     historyRetentionDays,
-    systemPrompt, setSystemPrompt
+    systemPrompt, setSystemPrompt,
+    autoCopyOnHide, setAutoCopyOnHide
   } = useSettingsStore();
   const { status: serverStatus, launch, stop, activeProfile } = useLlamaServer();
   const { 
@@ -101,6 +102,35 @@ export const Settings: React.FC = () => {
               </div>
             </div>
 
+            <div style={{ height: '1px', background: 'var(--peek-border)', margin: '4px 0' }} />
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ paddingRight: 16 }}>
+                <span style={{ fontSize: 14, display: 'block' }}>Copy Answer on Dismiss</span>
+                <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
+                  Put the last completed answer on the clipboard when you hide the overlay.
+                  Off by default — it replaces whatever you had copied. <kbd className="peek-kbd" style={{ fontSize: 10, padding: '1px 4px', height: 'auto' }}>Alt+C</kbd> always copies on demand.
+                </span>
+              </div>
+              <button
+                role="switch"
+                aria-checked={autoCopyOnHide}
+                onClick={() => setAutoCopyOnHide(!autoCopyOnHide)}
+                style={{
+                  flexShrink: 0,
+                  width: 36, height: 20, borderRadius: 10,
+                  background: autoCopyOnHide ? '#4caf50' : 'rgba(255,255,255,0.1)',
+                  border: 'none', cursor: 'pointer', position: 'relative',
+                  transition: 'background 0.2s', padding: 0
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 2, left: autoCopyOnHide ? 18 : 2,
+                  width: 16, height: 16, borderRadius: 8, background: '#fff',
+                  transition: 'left 0.2s'
+                }} />
+              </button>
+            </div>
           </div>
         </section>
 
