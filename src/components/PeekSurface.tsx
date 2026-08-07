@@ -206,22 +206,43 @@ export const PeekSurface: React.FC = () => {
   useEffect(() => {
     if (!visible) return;
 
+    /*
+     * The observer fires on sub-pixel changes, and each call used to cost an
+     * IPC round-trip into Rust's set_size — during streaming that is once per
+     * animation frame, and the window visibly steps as it grows. Round to whole
+     * pixels, skip anything that doesn't actually change the height, and
+     * coalesce bursts into a single frame.
+     */
+    let lastHeight = -1;
+    let frame = 0;
+
     const resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        // Floor 86 = input 52 + footer 34, the height of an empty overlay, and
-        // the same value as tauri.conf.json's window height. Ceiling 520 pairs
-        // with .peek-surface's 518px cap and --peek-transcript-max; see the
-        // height-budget note in index.css before changing any of them.
-        const height = Math.min(Math.max(entry.contentRect.height + 2, 86), 520);
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+
+      // Floor 86 = input 52 + footer 34, the height of an empty overlay, and
+      // the same value as tauri.conf.json's window height. Ceiling 520 pairs
+      // with .peek-surface's 518px cap and --peek-transcript-max; see the
+      // height-budget note in index.css before changing any of them.
+      const height = Math.min(Math.max(Math.round(entry.contentRect.height) + 2, 86), 520);
+      if (height === lastHeight) return;
+      lastHeight = height;
+
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
         invoke('resize_peek', { width: 660, height });
-      }
+      });
     });
 
     if (surfaceRef.current) {
       resizeObserver.observe(surfaceRef.current);
     }
 
-    return () => resizeObserver.disconnect();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+    };
   }, [visible]);
 
   // ── Reset menus on blur/hide ──

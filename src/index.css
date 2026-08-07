@@ -1406,15 +1406,22 @@ html[data-window='peek'] {
   border-bottom-color: var(--peek-accent);
 }
 
-/* Streaming cursor */
-.peek-cursor {
+/*
+ * Streaming caret.
+ *
+ * Attached to the last rendered block rather than being its own element, so it
+ * trails the final line of text instead of dropping onto a line of its own.
+ */
+.peek-thread-assistant[data-live='true'] > :last-child::after {
+  content: '';
   display: inline-block;
   width: 2px;
-  height: 1em;
+  height: 1.05em;
+  margin-left: 3px;
+  border-radius: 1px;
   background: var(--peek-accent);
-  margin-left: 2px;
-  animation: peek-blink 1s steps(2) infinite;
   vertical-align: text-bottom;
+  animation: peek-blink 1.15s ease-in-out infinite;
 }
 
 /* Waiting-for-first-token indicator */
@@ -2484,14 +2491,16 @@ html[data-window='peek'] {
   50% { opacity: 0.4; }
 }
 
+/* Eased rather than steps(): a hard on/off flicker is what read as harsh. */
 @keyframes peek-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  0%, 30% { opacity: 1; }
+  50% { opacity: 0.12; }
+  70%, 100% { opacity: 1; }
 }
 
 @keyframes peek-dot-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.6); opacity: 0.3; }
+  0%, 100% { transform: scale(0.72); opacity: 0.35; }
+  50% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes peek-fade-in {
@@ -2502,7 +2511,7 @@ html[data-window='peek'] {
 /* ═══ Reduced Motion ════════════════════════════════════════════════════ */
 
 @media (prefers-reduced-motion: reduce) {
-  .peek-cursor,
+  .peek-thread-assistant[data-live='true'] > :last-child::after,
   .peek-loading-dots span,
   .peek-thread-exchange {
     animation: none;

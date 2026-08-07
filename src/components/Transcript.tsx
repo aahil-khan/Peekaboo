@@ -191,16 +191,18 @@ const ExchangeBlock = React.memo<ExchangeBlockProps>(function ExchangeBlock({ ex
         <CopyButton text={exchange.user} label="Copy prompt" alignRight />
       </div>
 
-      <div className="peek-thread-assistant peek-md">
+      {/*
+        The caret is a ::after on the last rendered block rather than its own
+        element. Markdown renders block-level children, so a sibling <span>
+        landed on a line of its own and read as a stray pipe under the answer.
+      */}
+      <div className="peek-thread-assistant peek-md" data-live={isLive && exchange.assistant ? 'true' : undefined}>
         {isWaiting ? (
           <div className="peek-loading-dots" aria-label="Thinking…">
             <span /><span /><span />
           </div>
         ) : exchange.assistant ? (
-          <>
-            <MarkdownWrapper>{exchange.assistant}</MarkdownWrapper>
-            {isLive && <span className="peek-cursor" aria-hidden="true" />}
-          </>
+          <MarkdownWrapper>{exchange.assistant}</MarkdownWrapper>
         ) : null}
       </div>
 
