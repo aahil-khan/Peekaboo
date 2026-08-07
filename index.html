@@ -4,8 +4,62 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Peekaboo</title>
+    <script>
+      /*
+       * Stamps the theme and window kind onto <html> before anything paints.
+       *
+       * This deliberately duplicates a few lines of src/lib/theme.ts and
+       * src/lib/windowLabel.ts. Those live in the deferred module bundle, which
+       * arrives a frame or two after first paint — long enough to show a flash
+       * of the wrong theme, and (for the settings/setup windows) a flash of the
+       * transparent overlay background. Keep the three in sync.
+       */
+      (function () {
+        var el = document.documentElement;
+
+        try {
+          var persisted = JSON.parse(localStorage.getItem('peekaboo-settings') || '{}').state || {};
+          var mode = persisted.themeMode || 'dark';
+          el.dataset.theme =
+            mode === 'system'
+              ? matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+              : mode;
+          el.dataset.accent = persisted.themeAccent || 'indigo';
+        } catch (e) {
+          el.dataset.theme = 'dark';
+          el.dataset.accent = 'indigo';
+        }
+
+        /* Same field @tauri-apps/api reads, just read early enough to matter. */
+        var label = 'peekaboo';
+        try {
+          label = window.__TAURI_INTERNALS__.metadata.currentWindow.label;
+        } catch (e) {}
+        el.dataset.window = label === 'settings' || label === 'setup' ? label : 'peek';
+      })();
+    </script>
     <style>
-      html, body { background: transparent; }
+      /*
+       * Critical CSS. src/index.css ships with the module bundle, so these few
+       * values are inlined to cover the gap before it lands. They mirror
+       * --peek-bg-solid and --peek-text for each theme; update both together.
+       */
+      html,
+      body {
+        background: transparent;
+      }
+      html[data-window='settings'],
+      html[data-window='setup'] {
+        background: #18181b;
+        color: #fafafa;
+      }
+      html[data-theme='light'][data-window='settings'],
+      html[data-theme='light'][data-window='setup'] {
+        background: #f4f4f5;
+        color: #18181b;
+      }
     </style>
   </head>
   <body>

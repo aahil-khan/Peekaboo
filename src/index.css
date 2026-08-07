@@ -51,6 +51,33 @@ html, body, #root {
   user-select: none;
 }
 
+/* ─── Per-window Chrome ─────────────────────────────────────────────── */
+
+/*
+ * `data-window` is stamped onto <html> by the pre-paint script in index.html.
+ * These rules replace the imperative `document.body.style.*` writes that used
+ * to run in main.tsx after mount — doing it in CSS means the correct
+ * background is on screen for the very first frame.
+ */
+
+/* Settings and Setup are ordinary decorated OS windows: solid, and scrollable. */
+html[data-window='settings'],
+html[data-window='setup'],
+html[data-window='settings'] body,
+html[data-window='setup'] body {
+  background: var(--peek-bg-solid);
+  color: var(--peek-text);
+  overflow: auto;
+}
+
+/*
+ * Clip the webview's painted area to the surface radius so the compositor
+ * renders the transparent overlay without a rectangular edge showing through.
+ */
+html[data-window='peek'] {
+  border-radius: var(--peek-radius);
+}
+
 /* ─── Peek Surface ──────────────────────────────────────────────────── */
 
 .peek-surface {
