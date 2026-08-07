@@ -601,7 +601,7 @@ export const PeekSurface: React.FC = () => {
                   {activeProvider === 'llama' ? (
                     <>
                       {serverStatus === 'starting' && (
-                        <span className="peek-status-error" style={{ color: '#ff9800' }}>
+                        <span className="peek-status-error peek-status-warn">
                           Starting llama server…
                         </span>
                       )}
@@ -610,12 +610,12 @@ export const PeekSurface: React.FC = () => {
                       )}
                       {serverStatus === 'running' && activeModel && (
                         <span className="peek-status-model">
-                          <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#4caf50', marginRight: 5, verticalAlign: 'middle' }} />
+                          <span className="peek-status-dot peek-status-ok" />
                           {activeModel}
                         </span>
                       )}
                       {serverStatus === 'stopped' && (
-                        <span className="peek-status-error" style={{ color: 'var(--peek-text-muted)' }}>
+                        <span className="peek-status-error peek-status-muted">
                           llama server stopped
                         </span>
                       )}
@@ -642,14 +642,7 @@ export const PeekSurface: React.FC = () => {
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
-                        className="peek-bg-indicator"
-                        style={{ 
-                          color: toast.type === 'success' ? '#4caf50' : '#f44336', 
-                          background: toast.type === 'success' ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
+                        className={`peek-toast ${toast.type === 'success' ? 'peek-toast--success' : 'peek-toast--error'}`}
                       >
                         {toast.type === 'success' ? (
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -718,7 +711,7 @@ export const PeekSurface: React.FC = () => {
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    background: 'rgba(0, 0, 0, 0.4)',
+                    background: 'var(--peek-scrim)',
                     backdropFilter: 'blur(4px)',
                     display: 'flex',
                     alignItems: 'center',
@@ -742,7 +735,7 @@ export const PeekSurface: React.FC = () => {
                       maxHeight: '80%',
                       display: 'flex',
                       flexDirection: 'column',
-                      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3)',
+                      boxShadow: 'var(--peek-shadow-modal)',
                     }}
                   >
                     <div style={{

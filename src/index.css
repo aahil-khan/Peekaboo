@@ -112,6 +112,9 @@
   --peek-text-secondary: #a1a1aa;
   --peek-text-muted: #71717a;
   --peek-text-inverse: #18181b;
+  /* Text that sits on a filled accent surface. The dark accent is a light
+     indigo, so it takes dark text; the light accent inverts this. */
+  --peek-accent-contrast: #18181b;
 
   /* Status.
    * Deliberately drawn from the same Tailwind ramp as the rest of the
@@ -153,7 +156,6 @@
   --peek-accent-dim: rgba(var(--peek-accent-rgb), 0.15);
   --peek-accent-line: rgba(var(--peek-accent-rgb), 0.2);
   --peek-accent-line-strong: rgba(var(--peek-accent-rgb), 0.35);
-  --peek-accent-contrast: #ffffff;
 }
 
 /* ═══ Base Reset ════════════════════════════════════════════════════════ */
@@ -216,6 +218,7 @@ html[data-window='peek'] {
  * re-render mid-hover (inline-style hover state does not).
  */
 .peek-icon-btn,
+.peek-panel-close,
 .peek-scroll-bottom-btn {
   display: inline-flex;
   align-items: center;
@@ -229,9 +232,17 @@ html[data-window='peek'] {
   transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
 }
 
-.peek-icon-btn:hover:not(:disabled) {
+.peek-icon-btn:hover:not(:disabled),
+.peek-panel-close:hover:not(:disabled) {
   color: var(--peek-text);
   background: var(--peek-hover);
+}
+
+/* Close affordance shared by History, Models, Legend and Memory panels. */
+.peek-panel-close {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
 }
 
 .peek-icon-btn:focus-visible,
@@ -354,6 +365,240 @@ html[data-window='peek'] {
   background: var(--peek-scrollbar-thumb-hover);
 }
 
+/* ═══ Forms ═════════════════════════════════════════════════════════════
+ *
+ * Settings, Setup and LlamaProfileEditor each carried their own near-identical
+ * copy of these styles as inline style objects. One definition, three callers.
+ */
+
+.peek-field {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--peek-input-bg);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  padding: 7px var(--peek-space-2);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.peek-field:focus {
+  border-color: var(--peek-accent);
+}
+
+.peek-field::placeholder {
+  color: var(--peek-text-muted);
+}
+
+.peek-field--mono {
+  font-family: var(--peek-font-mono);
+}
+
+.peek-field--textarea {
+  resize: vertical;
+  line-height: var(--peek-leading);
+}
+
+.peek-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: var(--peek-space-2) var(--peek-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-sm);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-md);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.peek-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.peek-btn:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: 2px;
+}
+
+.peek-btn--primary {
+  background: var(--peek-accent);
+  color: var(--peek-accent-contrast);
+  font-weight: 600;
+}
+
+.peek-btn--primary:hover:not(:disabled) {
+  background: rgba(var(--peek-accent-rgb), 0.85);
+}
+
+.peek-btn--secondary {
+  background: var(--peek-surface-2);
+  color: var(--peek-text);
+  border-color: var(--peek-border);
+}
+
+.peek-btn--secondary:hover:not(:disabled) {
+  background: var(--peek-surface-3);
+}
+
+.peek-btn--danger {
+  background: var(--peek-error-soft);
+  color: var(--peek-error);
+  border-color: var(--peek-error-line);
+}
+
+.peek-btn--danger:hover:not(:disabled) {
+  background: var(--peek-error-soft);
+  border-color: var(--peek-error);
+}
+
+.peek-btn--sm {
+  padding: 7px var(--peek-space-3);
+  font-size: var(--peek-text-sm);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-secondary);
+  border-color: var(--peek-border);
+  white-space: nowrap;
+}
+
+.peek-btn--sm:hover:not(:disabled) {
+  background: var(--peek-surface-3);
+  color: var(--peek-text);
+}
+
+/* Form layout */
+
+.peek-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-3);
+}
+
+.peek-form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.peek-form-label {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+}
+
+.peek-form-hint {
+  font-size: var(--peek-text-xs);
+  color: var(--peek-text-muted);
+}
+
+.peek-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--peek-space-3);
+}
+
+.peek-form-actions {
+  display: flex;
+  gap: var(--peek-space-2);
+  padding-top: var(--peek-space-1);
+}
+
+.peek-form-error {
+  font-size: var(--peek-text-sm);
+  color: var(--peek-warning);
+}
+
+.peek-file-row {
+  display: flex;
+  gap: var(--peek-space-2);
+}
+
+/* Collapsible section, used to keep advanced tuning out of the way. */
+.peek-disclosure {
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-surface-1);
+}
+
+.peek-disclosure > summary {
+  padding: var(--peek-space-2) var(--peek-space-3);
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.peek-disclosure > summary::-webkit-details-marker { display: none; }
+
+.peek-disclosure > summary::before {
+  content: '▸';
+  display: inline-block;
+  margin-right: 6px;
+  color: var(--peek-text-muted);
+  transition: transform 0.15s ease;
+}
+
+.peek-disclosure[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.peek-disclosure > summary:hover {
+  color: var(--peek-text);
+}
+
+.peek-disclosure-body {
+  padding: 0 var(--peek-space-3) var(--peek-space-3);
+}
+
+/*
+ * Toggle switch. The knob is a pseudo-element driven off aria-checked, so the
+ * accessible state and the visual state cannot drift apart.
+ */
+.peek-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: var(--peek-toggle-off);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.peek-switch[aria-checked='true'] {
+  background: var(--peek-accent);
+}
+
+.peek-switch:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: 2px;
+}
+
+.peek-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--peek-toggle-knob);
+  box-shadow: var(--peek-shadow-pop);
+  transition: left 0.15s ease;
+}
+
+.peek-switch[aria-checked='true']::after {
+  left: 18px;
+}
+
 /* ═══ Peek Surface ══════════════════════════════════════════════════════ */
 
 .peek-surface {
@@ -425,6 +670,28 @@ html[data-window='peek'] {
 .peek-input-status {
   flex-shrink: 0;
   margin-top: var(--peek-space-1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--peek-text-muted);
+  cursor: pointer;
+  transition: color 0.12s ease;
+}
+
+.peek-input-status:hover,
+.peek-input-status:focus-visible {
+  outline: none;
+  color: var(--peek-error);
+}
+
+.peek-stop-icon {
+  width: 12px;
+  height: 12px;
+  background: currentColor;
+  border-radius: 2px;
 }
 
 .peek-input-hint {
@@ -631,6 +898,42 @@ html[data-window='peek'] {
   font-size: var(--peek-text-xs);
   color: var(--peek-accent);
   font-weight: 500;
+}
+
+/* Small state dot; takes its colour from the parent so one class covers
+   running / starting / stopped. */
+.peek-status-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: middle;
+}
+
+.peek-status-warn { color: var(--peek-warning); }
+.peek-status-muted { color: var(--peek-text-muted); }
+.peek-status-ok { color: var(--peek-success); }
+
+.peek-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-1);
+  padding: 2px var(--peek-space-2);
+  border-radius: var(--peek-radius-xs);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
+}
+
+.peek-toast--success {
+  color: var(--peek-success);
+  background: var(--peek-success-soft);
+}
+
+.peek-toast--error {
+  color: var(--peek-error);
+  background: var(--peek-error-soft);
 }
 
 /* ═══ Exchange View (paged — superseded by the transcript) ══════════════ */
@@ -1229,6 +1532,77 @@ html[data-window='peek'] {
 .peek-history-item-time {
   font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
+}
+
+/* ═══ Legend ════════════════════════════════════════════════════════════ */
+
+.peek-legend-group {
+  padding: var(--peek-space-3) var(--peek-space-3) var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--peek-text-muted);
+}
+
+.peek-legend-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--peek-space-3);
+  padding: 6px var(--peek-space-3);
+}
+
+.peek-legend-desc {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-secondary);
+}
+
+.peek-legend-row .peek-kbd {
+  flex-shrink: 0;
+  font-size: var(--peek-text-xs);
+  padding: 3px 6px;
+  height: auto;
+  background: var(--peek-surface-2);
+}
+
+/* ═══ Model List ════════════════════════════════════════════════════════ */
+
+.peek-model-row {
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--peek-space-2);
+}
+
+.peek-model-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px var(--peek-space-1);
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-muted);
+}
+
+.peek-model-badge--vision {
+  background: var(--peek-success-soft);
+  color: var(--peek-success);
+}
+
+.peek-model-meta {
+  display: flex;
+  gap: var(--peek-space-2);
+  margin-top: var(--peek-space-1);
+  font-size: var(--peek-text-xs);
+  font-weight: 400;
+  color: var(--peek-text-muted);
+}
+
+.peek-model-active {
+  flex-shrink: 0;
+  font-size: var(--peek-text-sm);
+  font-weight: 500;
+  color: var(--peek-success);
 }
 
 /* ═══ Animations ════════════════════════════════════════════════════════ */

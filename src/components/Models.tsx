@@ -184,15 +184,8 @@ export const Models: React.FC = () => {
               filteredModels.map((model, idx) => (
                 <button
                   key={model.name}
-                  className="peek-history-item"
-                  style={{
-                    background: idx === selectedIndex ? 'var(--peek-hover)' : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '8px 12px',
-                  }}
+                  className="peek-history-item peek-model-row"
+                  style={{ background: idx === selectedIndex ? 'var(--peek-hover)' : 'transparent' }}
                   onClick={() => {
                     setActiveModel(model.name);
                     setModelsOpen(false);
@@ -203,17 +196,17 @@ export const Models: React.FC = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {model.name}
                       {model.isVision ? (
-                        <span style={{ fontSize: 10, padding: '2px 4px', background: 'rgba(76, 175, 80, 0.15)', color: '#4caf50', borderRadius: 4 }}>Vision</span>
+                        <span className="peek-model-badge peek-model-badge--vision">Vision</span>
                       ) : (
-                        <span style={{ fontSize: 10, padding: '2px 4px', background: 'rgba(150, 150, 150, 0.15)', color: '#9e9e9e', borderRadius: 4 }}>Text</span>
+                        <span className="peek-model-badge">Text</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--peek-text-muted)', marginTop: 4, display: 'flex', gap: 8, fontWeight: 'normal' }}>
+                    <div className="peek-model-meta">
                       {model.parameterSize && <span>{model.parameterSize}</span>}
                       {model.quantization && <span>{model.quantization}</span>}
                     </div>
                   </span>
-                  {activeModel === model.name && <span style={{ fontSize: 12, color: '#4caf50' }}>Active</span>}
+                  {activeModel === model.name && <span className="peek-model-active">Active</span>}
                 </button>
               ))
             )}

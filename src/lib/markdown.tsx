@@ -135,7 +135,10 @@ function CopyableCodeBlock({
                 null,
                 React.createElement(
                   'svg',
-                  { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: '#4caf50', strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round' },
+                  // currentColor rather than stroke="var(--peek-success)": SVG
+                  // presentation attributes resolve custom properties
+                  // inconsistently across engines, colour does not.
+                  { width: 12, height: 12, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', style: { color: 'var(--peek-success)' }, strokeWidth: 2.5, strokeLinecap: 'round', strokeLinejoin: 'round' },
                   React.createElement('path', { d: 'M22 11.08V12a10 10 0 1 1-5.93-9.14' }),
                   React.createElement('polyline', { points: '22 4 12 14.01 9 11.01' })
                 ),
