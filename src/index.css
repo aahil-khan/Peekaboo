@@ -351,7 +351,6 @@ html[data-window='peek'] {
  * classes are listed here rather than composed in markup so each stays a
  * single class at the call site.
  */
-.peek-ghost-btn,
 .peek-copy-response-btn,
 .peek-code-copy-btn,
 .peek-history-action-btn {
@@ -370,7 +369,6 @@ html[data-window='peek'] {
   transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
 }
 
-.peek-ghost-btn:hover:not(:disabled),
 .peek-copy-response-btn:hover:not(:disabled),
 .peek-code-copy-btn:hover:not(:disabled),
 .peek-history-action-btn:hover:not(:disabled) {
@@ -379,7 +377,6 @@ html[data-window='peek'] {
   background: var(--peek-hover);
 }
 
-.peek-ghost-btn:focus-visible,
 .peek-copy-response-btn:focus-visible,
 .peek-code-copy-btn:focus-visible,
 .peek-history-action-btn:focus-visible {
@@ -388,12 +385,10 @@ html[data-window='peek'] {
   color: var(--peek-text);
 }
 
-.peek-ghost-btn:disabled,
 /*
  * Shared thin-scrollbar treatment. Applied by selector group for the same
  * reason as the buttons above — these elements each carry one class.
  */
-.peek-scroll,
 .peek-transcript,
 .peek-table-wrapper,
 .peek-code-block,
@@ -402,19 +397,16 @@ html[data-window='peek'] {
   scrollbar-color: var(--peek-scrollbar-thumb) transparent;
 }
 
-.peek-scroll::-webkit-scrollbar,
 .peek-transcript::-webkit-scrollbar,
 .peek-table-wrapper::-webkit-scrollbar,
 .peek-code-block::-webkit-scrollbar,
 .peek-history-list::-webkit-scrollbar { width: 4px; height: 4px; }
 
-.peek-scroll::-webkit-scrollbar-track,
 .peek-transcript::-webkit-scrollbar-track,
 .peek-table-wrapper::-webkit-scrollbar-track,
 .peek-code-block::-webkit-scrollbar-track,
 .peek-history-list::-webkit-scrollbar-track { background: transparent; }
 
-.peek-scroll::-webkit-scrollbar-thumb,
 .peek-transcript::-webkit-scrollbar-thumb,
 .peek-table-wrapper::-webkit-scrollbar-thumb,
 .peek-code-block::-webkit-scrollbar-thumb,
@@ -423,7 +415,6 @@ html[data-window='peek'] {
   border-radius: 2px;
 }
 
-.peek-scroll::-webkit-scrollbar-thumb:hover,
 .peek-transcript::-webkit-scrollbar-thumb:hover,
 .peek-table-wrapper::-webkit-scrollbar-thumb:hover,
 .peek-code-block::-webkit-scrollbar-thumb:hover,
@@ -1855,7 +1846,6 @@ html[data-window='peek'] {
 }
 
 .peek-badge--success { background: var(--peek-success-soft); color: var(--peek-success); }
-.peek-badge--warning { background: var(--peek-warning-soft); color: var(--peek-warning); }
 .peek-badge--info { background: var(--peek-accent-soft); color: var(--peek-accent); }
 
 .peek-wizard-result {
