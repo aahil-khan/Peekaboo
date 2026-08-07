@@ -11,10 +11,9 @@ export const Setup: React.FC = () => {
 
   const finish = async () => {
     setSetupCompleted(true);
-    const { autoCaptureSelection } = useSettingsStore.getState();
     try {
       await invoke('update_settings', {
-        settings: { auto_capture_selection: autoCaptureSelection, setup_completed: true },
+        settings: { setup_completed: true },
       });
     } catch {}
     invoke('hide_setup_mode');

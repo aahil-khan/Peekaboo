@@ -5,40 +5,6 @@ import { LlamaProfileEditor } from './LlamaProfileEditor';
 import { useLlamaServer } from '../hooks/useLlamaServer';
 import { usePluginsStore } from '../store/plugins';
 
-const Toggle: React.FC<{ checked: boolean; onChange: (checked: boolean) => void }> = ({ checked, onChange }) => (
-  <button
-    role="switch"
-    aria-checked={checked}
-    onClick={() => onChange(!checked)}
-    style={{
-      width: 40,
-      height: 24,
-      borderRadius: 12,
-      backgroundColor: checked ? '#4caf50' : 'rgba(255,255,255,0.2)',
-      position: 'relative',
-      border: 'none',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-      padding: 0,
-    }}
-  >
-    <div
-      style={{
-        width: 20,
-        height: 20,
-        borderRadius: '50%',
-        backgroundColor: '#fff',
-        position: 'absolute',
-        top: 2,
-        left: checked ? 18 : 2,
-        transition: 'left 0.2s',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-      }}
-    />
-  </button>
-);
-
-
 
 const smallBtnStyle: React.CSSProperties = {
   fontSize: 11,
@@ -68,11 +34,14 @@ export const Settings: React.FC = () => {
     llamaProfiles, deleteLlamaProfile,
     activeLlamaProfileId, setActiveLlamaProfileId,
     historyRetentionDays,
-    systemPrompt, setSystemPrompt,
-    autoCaptureSelection, setAutoCaptureSelection
+    systemPrompt, setSystemPrompt
   } = useSettingsStore();
   const { status: serverStatus, launch, stop, activeProfile } = useLlamaServer();
-  const { manifests, refreshManifests } = usePluginsStore();
+  const { 
+    manifests, refreshManifests,
+    enabledInputPlugins, toggleInputPlugin,
+    enabledOutputPlugins, toggleOutputPlugin
+  } = usePluginsStore();
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState<LlamaProfile | null>(null);
 
@@ -130,18 +99,6 @@ export const Settings: React.FC = () => {
                 <span style={{ fontSize: 11, color: 'var(--peek-text-muted)' }}>or</span>
                 <kbd className="peek-kbd" style={{ fontSize: 12, padding: '4px 8px', height: 'auto' }}>Ctrl+Space</kbd>
               </div>
-            </div>
-
-            <div style={{ height: '1px', background: 'var(--peek-border)', margin: '4px 0' }} />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: 14, display: 'block' }}>Capture Highlighted Text</span>
-                <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
-                  Automatically fill the input with currently selected text when summoning.
-                </span>
-              </div>
-              <Toggle checked={autoCaptureSelection} onChange={setAutoCaptureSelection} />
             </div>
 
           </div>
@@ -426,6 +383,106 @@ export const Settings: React.FC = () => {
             <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, lineHeight: 1.4 }}>
               This prompt will be injected as hidden context into every new conversation you start.
             </p>
+          </div>
+        </section>
+
+        {/* Plugins */}
+        <section style={{ marginBottom: 32 }}>
+          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Plugins</h3>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {(() => {
+              const ioPlugins = manifests.filter(m => m.plugin.type === 'input' || m.plugin.type === 'output');
+              const contextPlugins = manifests.filter(m => m.plugin.type === 'context');
+
+              if (ioPlugins.length === 0 && contextPlugins.length === 0) {
+                return (
+                  <p style={{ fontSize: 13, color: 'var(--peek-text-muted)', margin: 0 }}>
+                    No input, output, or context plugins found in <code>~/.config/peekaboo/plugins/</code>.
+                  </p>
+                );
+              }
+
+              return (
+                <>
+                  {ioPlugins.map((m) => {
+                    const isInput = m.plugin.type === 'input';
+                    const isEnabled = isInput
+                      ? enabledInputPlugins.includes(m.plugin.id)
+                      : enabledOutputPlugins.includes(m.plugin.id);
+
+                    return (
+                      <div key={m.plugin.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 14, fontWeight: 500 }}>{m.plugin.name}</span>
+                            <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4, color: 'var(--peek-text-muted)' }}>
+                              {m.plugin.type}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
+                            Version {m.plugin.version} • ID: {m.plugin.id}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            if (isInput) {
+                              toggleInputPlugin(m.plugin.id, !isEnabled);
+                            } else {
+                              toggleOutputPlugin(m.plugin.id, !isEnabled);
+                            }
+                          }}
+                          style={{
+                            width: 36, height: 20, borderRadius: 10,
+                            background: isEnabled ? '#4caf50' : 'rgba(255,255,255,0.1)',
+                            border: 'none', cursor: 'pointer', position: 'relative',
+                            transition: 'background 0.2s', padding: 0
+                          }}
+                        >
+                          <div style={{
+                            position: 'absolute', top: 2, left: isEnabled ? 18 : 2,
+                            width: 16, height: 16, borderRadius: 8, background: '#fff',
+                            transition: 'left 0.2s'
+                          }} />
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  {contextPlugins.length > 0 && (
+                    <>
+                      {ioPlugins.length > 0 && (
+                        <div style={{ height: '1px', background: 'var(--peek-border)', margin: '4px 0' }} />
+                      )}
+                      <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', margin: 0 }}>
+                        Context plugins are available via <code>/</code> commands.
+                      </p>
+                      {contextPlugins.map((m) => (
+                        <div key={m.plugin.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 14, fontWeight: 500 }}>{m.plugin.name}</span>
+                              <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4, color: 'var(--peek-text-muted)' }}>
+                                context
+                              </span>
+                              {m.context?.command && (
+                                <span style={{ fontSize: 11, color: 'var(--peek-text-muted)' }}>
+                                  /{m.context.command}
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
+                              Version {m.plugin.version} • ID: {m.plugin.id}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 12, color: 'var(--peek-text-muted)' }}>Available</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </section>
 

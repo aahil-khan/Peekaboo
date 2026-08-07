@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule } from './types';
+import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule } from './types';
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
@@ -38,9 +38,9 @@ export class PluginRegistry {
     try {
       const jsCode = await invoke<string>('get_plugin_js', { pluginId: id });
       
-      // Load as an ESM module by creating a Blob URL
-      const blob = new Blob([jsCode], { type: 'text/javascript' });
-      const url = URL.createObjectURL(blob);
+      // Load as an ESM module by creating a base64 Data URL to prevent WebkitGTK Blob URL crashes
+      const base64 = btoa(unescape(encodeURIComponent(jsCode)));
+      const url = `data:text/javascript;base64,${base64}`;
       
       try {
         const module = await import(/* @vite-ignore */ url);
@@ -50,8 +50,8 @@ export class PluginRegistry {
         } else {
           throw new Error('Plugin does not default export a valid object');
         }
-      } finally {
-        URL.revokeObjectURL(url);
+      } catch (err) {
+        throw err;
       }
     } catch (err) {
       p.error = String(err);
@@ -68,7 +68,7 @@ export class PluginRegistry {
         warn: (...args) => console.warn(`[Plugin:${manifest.plugin.id}]`, ...args),
         error: (...args) => console.error(`[Plugin:${manifest.plugin.id}]`, ...args),
       },
-      getSelection: async () => invoke<string>('peek-highlighted-text').catch(() => ''), // or use custom command
+      getSelection: async () => invoke<string>('plugin_get_selection').catch(() => ''),
       getClipboard: async () => navigator.clipboard.readText(),
       writeClipboard: async (text: string) => navigator.clipboard.writeText(text),
       getActiveWindow: async () => invoke<{ title: string; app: string }>('get_active_window'),
@@ -150,6 +150,58 @@ export class PluginRegistry {
     await this.loadPlugin(id);
     if (!p.module || p.module.type !== 'model') return null;
     return p.module as ModelPluginModule;
+  }
+
+  getContextPlugins(): PluginManifest[] {
+    return this.getManifests().filter(m => m.plugin.type === 'context');
+  }
+
+  async searchContextPlugin(id: string, query: string): Promise<MenuItem[]> {
+    let p = this.plugins.get(id);
+    if (!p) {
+      await this.discover(true);
+      p = this.plugins.get(id);
+    }
+    if (!p || p.manifest.plugin.type !== 'context') return [];
+    
+    await this.loadPlugin(id);
+    if (!p.module || p.module.type !== 'context') return [];
+
+    try {
+      const ctx = this.createContext(p.manifest);
+      const timeout = new Promise<MenuItem[]>((resolve) => setTimeout(() => resolve([]), 800));
+      return await Promise.race([
+        (p.module as ContextPluginModule).search(query, ctx).catch(() => []),
+        timeout
+      ]);
+    } catch (err) {
+      console.warn(`Context plugin ${id} search failed:`, err);
+      return [];
+    }
+  }
+
+  async resolveContextPlugin(id: string, itemId: string): Promise<ContextFragment[]> {
+    let p = this.plugins.get(id);
+    if (!p) {
+      await this.discover(true);
+      p = this.plugins.get(id);
+    }
+    if (!p || p.manifest.plugin.type !== 'context') return [];
+    
+    await this.loadPlugin(id);
+    if (!p.module || p.module.type !== 'context') return [];
+
+    try {
+      const ctx = this.createContext(p.manifest);
+      const timeout = new Promise<ContextFragment[]>((resolve) => setTimeout(() => resolve([]), 2000));
+      return await Promise.race([
+        (p.module as ContextPluginModule).resolve(itemId, ctx).catch(() => []),
+        timeout
+      ]);
+    } catch (err) {
+      console.warn(`Context plugin ${id} resolve failed:`, err);
+      return [];
+    }
   }
 }
 

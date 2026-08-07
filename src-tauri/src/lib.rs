@@ -27,7 +27,6 @@ mod commands {
 
     #[derive(Default, serde::Deserialize, Clone)]
     pub struct AppSettings {
-        pub auto_capture_selection: bool,
         pub setup_completed: bool,
     }
 
@@ -73,7 +72,8 @@ mod commands {
         }
     }
 
-    fn get_primary_selection() -> Option<String> {
+    #[tauri::command]
+    pub fn plugin_get_selection() -> Option<String> {
         #[cfg(target_os = "linux")]
         {
             use std::process::Command;
@@ -102,11 +102,6 @@ mod commands {
                     }
                 }
             }
-            // Clear selection if we got one to avoid stale captures
-            if selection.is_some() {
-                let _ = Command::new("wl-copy").args(["-p", "-c"]).status();
-                let _ = Command::new("xclip").args(["-selection", "primary", "-i", "/dev/null"]).status();
-            }
             selection
         }
 
@@ -128,10 +123,10 @@ mod commands {
 
     #[tauri::command]
     pub fn toggle_peek(app: AppHandle, state: State<'_, AppState>) {
-        let (capture_selection, setup_completed) = if let Ok(lock) = state.settings.lock() {
-            (lock.auto_capture_selection, lock.setup_completed)
+        let setup_completed = if let Ok(lock) = state.settings.lock() {
+            lock.setup_completed
         } else {
-            (true, true)
+            true
         };
 
         // If setup not done, shortcut opens setup window instead
@@ -158,11 +153,6 @@ mod commands {
             if window.is_visible().unwrap_or(false) {
                 hide_peek(app);
             } else {
-                if capture_selection {
-                    if let Some(text) = get_primary_selection() {
-                        let _ = window.emit("peek-highlighted-text", text);
-                    }
-                }
                 show_peek(app);
             }
         }
@@ -307,7 +297,7 @@ mod commands {
 }
 
 mod plugin_commands {
-    use tauri::{AppHandle, Manager};
+    use tauri::AppHandle;
     use serde_json::Value;
     use std::path::PathBuf;
 
@@ -359,8 +349,20 @@ mod plugin_commands {
                                 if let Some(plugin_block) = value.get("plugin") {
                                     if let Some(id_val) = plugin_block.get("id") {
                                         if id_val.as_str() == Some(&plugin_id) {
-                                            let js_path = path.join("dist").join("index.js");
-                                            return std::fs::read_to_string(js_path).map_err(|e| format!("Failed to read JS: {}", e));
+                                            let dist_js = path.join("dist").join("index.js");
+                                            let root_js = path.join("index.js");
+                                            let js_path = if dist_js.exists() {
+                                                dist_js
+                                            } else if root_js.exists() {
+                                                root_js
+                                            } else {
+                                                return Err(format!(
+                                                    "Plugin JS not found (tried dist/index.js and index.js) for {}",
+                                                    plugin_id
+                                                ));
+                                            };
+                                            return std::fs::read_to_string(js_path)
+                                                .map_err(|e| format!("Failed to read JS: {}", e));
                                         }
                                     }
                                 }
@@ -464,7 +466,6 @@ pub fn run() {
     tauri::Builder::default()
         .manage(commands::AppState {
             settings: std::sync::Mutex::new(commands::AppSettings {
-                auto_capture_selection: true,
                 setup_completed: false,
             }),
         })
@@ -536,6 +537,7 @@ pub fn run() {
             commands::hide_setup_mode,
             commands::reload_app,
             commands::reset_and_show_setup,
+            commands::plugin_get_selection,
             plugin_commands::discover_plugins,
             plugin_commands::get_plugin_js,
             plugin_commands::plugin_read_file,

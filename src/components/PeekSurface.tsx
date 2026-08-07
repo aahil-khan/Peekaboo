@@ -161,7 +161,7 @@ export const PeekSurface: React.FC = () => {
           if (!attachmentsRef.current.some(a => a.content === f.content)) {
             addAttachment({
               type: 'plugin',
-              label: `📎 ${f.id}`,
+              label: f.label || f.id || 'Context',
               content: f.content,
               mediaType: 'text/plain'
             });
@@ -492,6 +492,14 @@ export const PeekSurface: React.FC = () => {
               <Input
                 onSubmit={handleSubmit}
                 onAbort={abortStream}
+                onAttachFragment={(f) => {
+                  addAttachment({
+                    type: 'plugin',
+                    label: f.label || f.id || 'Context',
+                    content: f.content,
+                    mediaType: 'text/plain',
+                  });
+                }}
                 onAttachImage={isVisionModel ? (base64, mediaType) => {
                   // Determine a nice label based on type
                   const isPng = mediaType.includes('png');
