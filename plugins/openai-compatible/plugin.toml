@@ -1,0 +1,16 @@
+api_version = 1
+
+[plugin]
+id = "openai-compatible"
+name = "OpenAI Compatible API"
+version = "1.1.0"
+type = "model"
+
+# Edit these in ~/.config/peekaboo/plugins/openai-compatible/plugin.toml after
+# copying this plugin out of the app — built-ins are not editable in place.
+# baseUrl points at anything that speaks the OpenAI chat-completions API:
+# OpenRouter, Together, Groq, vLLM, LM Studio, a local proxy.
+[settings]
+baseUrl = "https://api.openai.com/v1"
+apiKey = ""
+model = "gpt-4o-mini"
