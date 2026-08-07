@@ -384,9 +384,17 @@ export const PeekSurface: React.FC = () => {
 
   // ── Clear conversation ──
   const handleClear = useCallback(async () => {
+    // Nothing to clear means nothing happened — confirming a no-op just
+    // teaches the user the button lies.
+    const { messages: current, isStreaming: streaming, input: draft } = usePeekStore.getState();
+    const hadSomething =
+      streaming || draft.trim().length > 0 || current.some((m) => m.role !== 'system');
+
     abortStream();
     clear();
     clearAttachments();
+
+    if (!hadSomething) return;
     setToast({ type: 'success', text: 'New chat' });
     setTimeout(() => setToast(null), 2000);
   }, [abortStream, clear, clearAttachments]);

@@ -917,20 +917,20 @@ html[data-window='peek'] {
 
 /* ═══ Slash Command Menu ════════════════════════════════════════════════ */
 
+/*
+ * In normal flow, not an absolutely-positioned popover.
+ *
+ * As a popover it contributed nothing to the surface's measured height, so the
+ * ResizeObserver never grew the window — the menu drew on top of the footer and
+ * got clipped by .peek-surface's overflow:hidden. In flow it pushes the surface
+ * taller and the window follows, which is how every other row here works.
+ */
 .peek-slash-menu {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: var(--peek-space-2);
-  background: var(--peek-elevated);
-  border: 1px solid var(--peek-border);
-  border-radius: var(--peek-radius-md);
-  box-shadow: var(--peek-shadow-menu);
-  overflow: hidden;
-  z-index: 10;
-  backdrop-filter: var(--peek-backdrop);
-  -webkit-backdrop-filter: var(--peek-backdrop);
+  flex-shrink: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--peek-border);
+  background: var(--peek-surface-1);
 }
 
 .peek-slash-empty {
