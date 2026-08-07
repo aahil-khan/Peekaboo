@@ -1,66 +1,73 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { useSettingsStore, LlamaProfile } from '../store/settings';
+import { openUrl } from '@tauri-apps/plugin-opener';
+import {
+  useSettingsStore,
+  LlamaProfile,
+  THEME_ACCENTS,
+  type ThemeMode,
+} from '../store/settings';
 import { LlamaProfileEditor } from './LlamaProfileEditor';
+import { ProviderFields } from './ProviderFields';
 import { useLlamaServer } from '../hooks/useLlamaServer';
 import { usePluginsStore } from '../store/plugins';
+import { BUILTIN_PROVIDERS, providerLabel, verifyProvider } from '../lib/providerCatalog';
 
+/**
+ * The settings window.
+ *
+ * Previously a single 480x520 pane holding five sections in one undifferentiated
+ * scroll — four to six screenfuls with no header, navigation or search. Now a
+ * left rail, so each area is one screen and reachable in a click.
+ */
 
-const smallBtnStyle: React.CSSProperties = {
-  fontSize: 11,
-  padding: '3px 8px',
-  background: 'rgba(255,255,255,0.05)',
-  color: 'var(--peek-text-secondary)',
-  border: '1px solid var(--peek-border)',
-  borderRadius: 4,
-  cursor: 'pointer',
-  fontFamily: 'var(--peek-font)',
-};
+type SectionId = 'general' | 'provider' | 'assistant' | 'plugins' | 'data';
 
-import { OpenAIProvider } from '../providers/openai';
-import { AnthropicProvider } from '../providers/anthropic';
-import { GeminiProvider } from '../providers/gemini';
-import { OllamaProvider } from '../providers/ollama';
+const SECTIONS: { id: SectionId; label: string }[] = [
+  { id: 'general', label: 'General' },
+  { id: 'provider', label: 'AI provider' },
+  { id: 'assistant', label: 'Assistant' },
+  { id: 'plugins', label: 'Plugins' },
+  { id: 'data', label: 'Data & privacy' },
+];
+
+const RETENTION_CHOICES = [7, 30, 90, 365];
 
 export const Settings: React.FC = () => {
   const {
     activeProvider, setActiveProvider,
-    ollamaBaseUrl, setOllamaBaseUrl,
     llamaBaseUrl, setLlamaBaseUrl,
-    openaiApiKey, setOpenaiApiKey,
-    openaiBaseUrl, setOpenaiBaseUrl,
-    anthropicApiKey, setAnthropicApiKey,
-    geminiApiKey, setGeminiApiKey,
     llamaProfiles, deleteLlamaProfile,
     activeLlamaProfileId, setActiveLlamaProfileId,
-    historyRetentionDays,
+    historyRetentionDays, setHistoryRetentionDays,
     systemPrompt, setSystemPrompt,
-    autoCopyOnHide, setAutoCopyOnHide
+    autoCopyOnHide, setAutoCopyOnHide,
+    themeMode, setThemeMode,
+    themeAccent, setThemeAccent,
   } = useSettingsStore();
+
   const { status: serverStatus, launch, stop, activeProfile } = useLlamaServer();
-  const { 
+  const {
     manifests, refreshManifests,
     enabledInputPlugins, toggleInputPlugin,
-    enabledOutputPlugins, toggleOutputPlugin
+    enabledOutputPlugins, toggleOutputPlugin,
   } = usePluginsStore();
+
+  const [section, setSection] = useState<SectionId>('general');
   const [showAddProfile, setShowAddProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState<LlamaProfile | null>(null);
 
-  // Verification state
   const [draftProvider, setDraftProvider] = useState<string>(activeProvider);
-  const [verificationStatus, setVerificationStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
-  const [verificationError, setVerificationError] = useState<string>('');
+  const [verifyState, setVerifyState] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [verifyMessage, setVerifyMessage] = useState('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     refreshManifests();
-  }, []);
+  }, [refreshManifests]);
 
-  const modelPlugins = manifests.filter(m => m.plugin.type === 'model');
-
-  React.useEffect(() => {
-    // Basic focus to allow immediate ESC key binding to work natively
+  useEffect(() => {
+    // Focus so the Escape binding below works without a click first.
     window.focus();
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         import('@tauri-apps/api/webviewWindow').then(({ getCurrentWebviewWindow }) => {
@@ -72,95 +79,148 @@ export const Settings: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const modelPlugins = manifests.filter((m) => m.plugin.type === 'model');
+  const providerIds = [...BUILTIN_PROVIDERS.map((p) => p.id), ...modelPlugins.map((mp) => mp.plugin.id)];
+
+  const runVerification = async () => {
+    setVerifyState('testing');
+    setVerifyMessage('');
+    const result = await verifyProvider(draftProvider);
+    if (result.ok) {
+      setActiveProvider(draftProvider);
+      setVerifyState('success');
+      setVerifyMessage(result.note ?? `Connected. ${providerLabel(draftProvider)} is now active.`);
+    } else {
+      setVerifyState('error');
+      setVerifyMessage(result.error ?? 'Could not connect.');
+    }
+  };
+
   return (
-    <div style={{
-      width: '100%',
-      height: '100vh',
-      backgroundColor: 'var(--peek-bg-solid)',
-      color: 'var(--peek-text)',
-      display: 'flex',
-      flexDirection: 'column',
-      fontFamily: 'var(--peek-font)',
-      userSelect: 'none',
-      borderTop: '1px solid rgba(255,255,255,0.05)',
-    }}>
+    <div className="peek-settings">
+      <nav className="peek-settings-nav">
+        <div className="peek-settings-brand">Peekaboo</div>
+        {SECTIONS.map((s) => (
+          <button
+            key={s.id}
+            className="peek-settings-navbtn"
+            aria-current={section === s.id ? 'page' : undefined}
+            onClick={() => setSection(s.id)}
+          >
+            {s.label}
+          </button>
+        ))}
+      </nav>
 
+      <div className="peek-settings-body">
+        {section === 'general' && (
+          <>
+            <h2 className="peek-settings-h2">General</h2>
+            <p className="peek-settings-intro">How Peekaboo looks and behaves when you summon it.</p>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-        
-        {/* Hotkey Section */}
-        <section style={{ marginBottom: 32 }}>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Global Shortcut</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div className="peek-settings-card">
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Theme</span>
+                  <span className="peek-settings-desc">
+                    “System” follows your desktop's light or dark setting.
+                  </span>
+                </span>
+                <div className="peek-segmented">
+                  {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      aria-pressed={themeMode === mode}
+                      onClick={() => setThemeMode(mode)}
+                    >
+                      {mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'System'}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14 }}>Summon Peekaboo</span>
-              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                <kbd className="peek-kbd" style={{ fontSize: 12, padding: '4px 8px', height: 'auto' }}>Alt+Space</kbd>
-                <span style={{ fontSize: 11, color: 'var(--peek-text-muted)' }}>or</span>
-                <kbd className="peek-kbd" style={{ fontSize: 12, padding: '4px 8px', height: 'auto' }}>Ctrl+Space</kbd>
+              <div className="peek-settings-divider" />
+
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Accent colour</span>
+                  <span className="peek-settings-desc">Used for highlights, links and the cursor.</span>
+                </span>
+                <div className="peek-swatches">
+                  {THEME_ACCENTS.map((accent) => (
+                    <button
+                      key={accent}
+                      className="peek-swatch"
+                      data-accent={accent}
+                      aria-pressed={themeAccent === accent}
+                      aria-label={accent}
+                      title={accent}
+                      onClick={() => setThemeAccent(accent)}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div style={{ height: '1px', background: 'var(--peek-border)', margin: '4px 0' }} />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ paddingRight: 16 }}>
-                <span style={{ fontSize: 14, display: 'block' }}>Copy Answer on Dismiss</span>
-                <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
-                  Put the last completed answer on the clipboard when you hide the overlay.
-                  Off by default — it replaces whatever you had copied. <kbd className="peek-kbd" style={{ fontSize: 10, padding: '1px 4px', height: 'auto' }}>Alt+C</kbd> always copies on demand.
+            <div className="peek-settings-card">
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Summon Peekaboo</span>
+                  <span className="peek-settings-desc">
+                    Works from any app. Not currently rebindable.
+                  </span>
+                </span>
+                <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                  <kbd className="peek-kbd">Ctrl+Space</kbd>
+                  <span className="peek-form-hint">or</span>
+                  <kbd className="peek-kbd">Alt+Space</kbd>
                 </span>
               </div>
-              <button
-                role="switch"
-                aria-checked={autoCopyOnHide}
-                onClick={() => setAutoCopyOnHide(!autoCopyOnHide)}
-                style={{
-                  flexShrink: 0,
-                  width: 36, height: 20, borderRadius: 10,
-                  background: autoCopyOnHide ? '#4caf50' : 'rgba(255,255,255,0.1)',
-                  border: 'none', cursor: 'pointer', position: 'relative',
-                  transition: 'background 0.2s', padding: 0
-                }}
-              >
-                <div style={{
-                  position: 'absolute', top: 2, left: autoCopyOnHide ? 18 : 2,
-                  width: 16, height: 16, borderRadius: 8, background: '#fff',
-                  transition: 'left 0.2s'
-                }} />
-              </button>
-            </div>
-          </div>
-        </section>
 
-        {/* AI Provider Section */}
-        <section style={{ marginBottom: 32 }}>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>AI Provider</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14 }}>Select Provider</span>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {['ollama', 'llama', 'openai', 'anthropic', 'gemini', ...modelPlugins.map(mp => mp.plugin.id)].map((p) => {
-                  const label = p === 'ollama' ? 'Ollama' : p === 'llama' ? 'llama.cpp' : p === 'openai' ? 'OpenAI' : p === 'anthropic' ? 'Anthropic' : p === 'gemini' ? 'Google Gemini' : (modelPlugins.find(mp => mp.plugin.id === p)?.plugin.name || p);
+              <div className="peek-settings-divider" />
+
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Copy the answer when I hide the window</span>
+                  <span className="peek-settings-desc">
+                    Off by default — it replaces whatever you had copied.{' '}
+                    <kbd className="peek-kbd">Alt+C</kbd> copies on demand instead.
+                  </span>
+                </span>
+                <button
+                  className="peek-switch"
+                  role="switch"
+                  aria-checked={autoCopyOnHide}
+                  aria-label="Copy the answer when I hide the window"
+                  onClick={() => setAutoCopyOnHide(!autoCopyOnHide)}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {section === 'provider' && (
+          <>
+            <h2 className="peek-settings-h2">AI provider</h2>
+            <p className="peek-settings-intro">
+              Where your questions get answered. Local providers keep everything on this machine;
+              cloud providers send your messages to that company's servers.
+            </p>
+
+            <div className="peek-settings-card">
+              <div className="peek-provider-pills">
+                {providerIds.map((id) => {
+                  const label = providerLabel(id, modelPlugins.find((mp) => mp.plugin.id === id)?.plugin.name);
                   return (
                     <button
-                      key={p}
+                      key={id}
+                      className="peek-provider-pill"
+                      aria-pressed={draftProvider === id}
+                      data-active={activeProvider === id ? 'true' : undefined}
                       onClick={() => {
-                        setDraftProvider(p);
-                        setVerificationStatus('idle');
-                        setVerificationError('');
-                      }}
-                      style={{
-                        fontSize: 13,
-                        padding: '2px 10px',
-                        borderRadius: 4,
-                        border: 'none',
-                        cursor: 'pointer',
-                        background: draftProvider === p ? (activeProvider === p ? 'rgba(76,175,80,0.2)' : 'rgba(255,255,255,0.15)') : 'rgba(255,255,255,0.05)',
-                        color: draftProvider === p ? (activeProvider === p ? '#4caf50' : 'var(--peek-text)') : 'var(--peek-text-secondary)',
-                        fontFamily: 'var(--peek-font)',
+                        setDraftProvider(id);
+                        setVerifyState('idle');
+                        setVerifyMessage('');
                       }}
                     >
                       {label}
@@ -168,389 +228,323 @@ export const Settings: React.FC = () => {
                   );
                 })}
               </div>
-            </div>
 
-            {draftProvider === 'ollama' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>Ollama Base URL</label>
-                <input
-                  type="text"
-                  value={ollamaBaseUrl}
-                  onChange={(e) => { setOllamaBaseUrl(e.target.value); setVerificationStatus('idle'); }}
-                  style={{
-                    background: 'rgba(0,0,0,0.2)',
-                    border: '1px solid var(--peek-border)',
-                    color: 'var(--peek-text)',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    fontSize: 14,
-                    outline: 'none',
-                    fontFamily: 'var(--peek-font-mono)'
-                  }}
-                />
-              </div>
-            )}
+              {draftProvider !== 'llama' && (
+                <>
+                  <ProviderFields provider={draftProvider} onChange={() => setVerifyState('idle')} />
 
-            {draftProvider === 'openai' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>OpenAI API Key</label>
-                <input
-                  type="password"
-                  value={openaiApiKey}
-                  placeholder="sk-..."
-                  onChange={(e) => { setOpenaiApiKey(e.target.value); setVerificationStatus('idle'); }}
-                  style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--peek-border)', color: 'var(--peek-text)', padding: '8px 12px', borderRadius: 6, fontSize: 14, outline: 'none', fontFamily: 'var(--peek-font-mono)' }}
-                />
-                <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)', marginTop: 4 }}>OpenAI Base URL</label>
-                <input
-                  type="text"
-                  value={openaiBaseUrl}
-                  onChange={(e) => { setOpenaiBaseUrl(e.target.value); setVerificationStatus('idle'); }}
-                  style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--peek-border)', color: 'var(--peek-text)', padding: '8px 12px', borderRadius: 6, fontSize: 14, outline: 'none', fontFamily: 'var(--peek-font-mono)' }}
-                />
-              </div>
-            )}
-
-            {draftProvider === 'anthropic' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>Anthropic API Key</label>
-                <input
-                  type="password"
-                  value={anthropicApiKey}
-                  placeholder="sk-ant-..."
-                  onChange={(e) => { setAnthropicApiKey(e.target.value); setVerificationStatus('idle'); }}
-                  style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--peek-border)', color: 'var(--peek-text)', padding: '8px 12px', borderRadius: 6, fontSize: 14, outline: 'none', fontFamily: 'var(--peek-font-mono)' }}
-                />
-              </div>
-            )}
-
-            {draftProvider === 'gemini' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>Google Gemini API Key</label>
-                <input
-                  type="password"
-                  value={geminiApiKey}
-                  placeholder="AIza..."
-                  onChange={(e) => { setGeminiApiKey(e.target.value); setVerificationStatus('idle'); }}
-                  style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--peek-border)', color: 'var(--peek-text)', padding: '8px 12px', borderRadius: 6, fontSize: 14, outline: 'none', fontFamily: 'var(--peek-font-mono)' }}
-                />
-              </div>
-            )}
-
-            {draftProvider !== 'llama' && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                {verificationStatus === 'success' ? (
-                  <span style={{ fontSize: 13, color: '#4caf50' }}>✓ Connection verified, {draftProvider} is active</span>
-                ) : verificationStatus === 'error' ? (
-                  <span style={{ fontSize: 13, color: '#f44336' }}>✗ {verificationError || 'Connection failed'}</span>
-                ) : (
-                  <span style={{ fontSize: 13, color: 'var(--peek-text-muted)' }}>
-                    {draftProvider === activeProvider ? 'Currently active' : 'Click verify to test and switch'}
-                  </span>
-                )}
-                <button
-                  disabled={verificationStatus === 'testing'}
-                  onClick={async () => {
-                    setVerificationStatus('testing');
-                    setVerificationError('');
-                    let isAvailable = false;
-                    try {
-                      if (draftProvider === 'ollama') {
-                        isAvailable = await new OllamaProvider(ollamaBaseUrl).isAvailable();
-                      } else if (draftProvider === 'openai') {
-                        isAvailable = await new OpenAIProvider(openaiBaseUrl, openaiApiKey).isAvailable();
-                      } else if (draftProvider === 'anthropic') {
-                        isAvailable = await new AnthropicProvider(anthropicApiKey).isAvailable();
-                      } else if (draftProvider === 'gemini') {
-                        isAvailable = await new GeminiProvider(geminiApiKey).isAvailable();
-                      } else {
-                        // Assuming it's a plugin provider (which we didn't mock for isAvailable natively yet in Settings, but plugins generally skip connection validation)
-                        isAvailable = true; 
+                  <div className="peek-settings-row">
+                    <span
+                      className={
+                        verifyState === 'success'
+                          ? 'peek-settings-desc peek-tone-ok'
+                          : verifyState === 'error'
+                            ? 'peek-settings-desc peek-tone-error'
+                            : 'peek-settings-desc'
                       }
-                      
-                      if (isAvailable) {
-                        setVerificationStatus('success');
-                        setActiveProvider(draftProvider);
-                      } else {
-                        setVerificationStatus('error');
-                        setVerificationError('Could not connect. Check your configuration.');
-                      }
-                    } catch (e: any) {
-                      setVerificationStatus('error');
-                      setVerificationError(e.message || 'Verification failed');
-                    }
-                  }}
-                  style={{
-                    padding: '6px 14px',
-                    background: verificationStatus === 'testing' ? 'rgba(255,255,255,0.1)' : 'rgba(76,175,80,0.15)',
-                    color: verificationStatus === 'testing' ? 'var(--peek-text-muted)' : '#4caf50',
-                    border: 'none',
-                    borderRadius: 6,
-                    fontSize: 13,
-                    cursor: verificationStatus === 'testing' ? 'wait' : 'pointer',
-                    fontFamily: 'var(--peek-font)',
-                    fontWeight: 500
-                  }}
-                >
-                  {verificationStatus === 'testing' ? 'Verifying...' : draftProvider === activeProvider ? 'Verify Connection' : 'Verify & Switch'}
-                </button>
-              </div>
-            )}
-
-            {draftProvider === 'llama' && (
-              <>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>Server URL</label>
-                    <span style={{ fontSize: 12, color: serverStatus === 'running' ? '#4caf50' : serverStatus === 'starting' ? '#ff9800' : 'var(--peek-text-muted)' }}>
-                      {serverStatus === 'running' ? '● Running' : serverStatus === 'starting' ? '● Starting…' : serverStatus === 'error' ? '● Error' : '○ Stopped'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input
-                      type="text"
-                      value={llamaBaseUrl}
-                      onChange={(e) => setLlamaBaseUrl(e.target.value)}
-                      style={{
-                        flex: 1,
-                        background: 'rgba(0,0,0,0.2)',
-                        border: '1px solid var(--peek-border)',
-                        color: 'var(--peek-text)',
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        fontSize: 14,
-                        outline: 'none',
-                        fontFamily: 'var(--peek-font-mono)'
-                      }}
-                    />
-                    {serverStatus === 'running' ? (
-                      <button onClick={stop} style={{ padding: '8px 14px', background: 'rgba(244,67,54,0.12)', color: '#f44336', border: '1px solid rgba(244,67,54,0.3)', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontFamily: 'var(--peek-font)', whiteSpace: 'nowrap' }}>Stop</button>
-                    ) : activeProfile ? (
-                      <button onClick={() => launch(activeProfile)} style={{ padding: '8px 14px', background: 'rgba(76,175,80,0.12)', color: '#4caf50', border: '1px solid rgba(76,175,80,0.3)', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontFamily: 'var(--peek-font)', whiteSpace: 'nowrap' }}>Start</button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {/* Model Profiles */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>Model Profiles</label>
-                    <button
-                      onClick={() => { setShowAddProfile(true); setEditingProfile(null); }}
-                      style={{ fontSize: 12, padding: '3px 10px', background: 'rgba(255,255,255,0.06)', color: 'var(--peek-text-secondary)', border: '1px solid var(--peek-border)', borderRadius: 4, cursor: 'pointer', fontFamily: 'var(--peek-font)' }}
                     >
-                      + Add
+                      {verifyState === 'success' || verifyState === 'error'
+                        ? verifyMessage
+                        : draftProvider === activeProvider
+                          ? 'Currently active.'
+                          : 'Check the connection to switch to this provider.'}
+                    </span>
+                    <button
+                      className="peek-btn peek-btn--secondary"
+                      style={{ flexShrink: 0 }}
+                      disabled={verifyState === 'testing'}
+                      onClick={runVerification}
+                    >
+                      {verifyState === 'testing'
+                        ? 'Checking…'
+                        : draftProvider === activeProvider
+                          ? 'Check connection'
+                          : 'Check & switch'}
                     </button>
                   </div>
-
-                  {llamaProfiles.length === 0 && !showAddProfile && (
-                    <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', margin: 0 }}>No profiles yet. Add one to launch a model.</p>
-                  )}
-
-                  {llamaProfiles.map((p) => (
-                    <div key={p.id} style={{
-                      background: activeLlamaProfileId === p.id ? 'rgba(76,175,80,0.06)' : 'rgba(0,0,0,0.15)',
-                      border: `1px solid ${activeLlamaProfileId === p.id ? 'rgba(76,175,80,0.3)' : 'var(--peek-border)'}`,
-                      borderRadius: 8, padding: '10px 12px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    }}>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 500 }}>{p.name}</div>
-                        <div style={{ fontSize: 11, color: 'var(--peek-text-muted)', marginTop: 2 }}>
-                          {p.modelPath.split(/[\\/]/).pop()} · {p.contextSize.toLocaleString()} ctx · {p.nGpuLayers} layers
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {activeLlamaProfileId !== p.id && (
-                          <button onClick={() => setActiveLlamaProfileId(p.id)} style={smallBtnStyle}>Use</button>
-                        )}
-                        {activeLlamaProfileId === p.id && (
-                          <span style={{ fontSize: 11, color: '#4caf50', padding: '3px 8px' }}>Active</span>
-                        )}
-                        <button onClick={() => { setEditingProfile(p); setShowAddProfile(false); }} style={smallBtnStyle}>Edit</button>
-                        <button onClick={() => deleteLlamaProfile(p.id)} style={{ ...smallBtnStyle, color: '#f44336' }}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-
-                  {(showAddProfile || editingProfile) && (
-                    <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: 16 }}>
-                      <LlamaProfileEditor
-                        profile={editingProfile ?? undefined}
-                        onSave={() => { setShowAddProfile(false); setEditingProfile(null); }}
-                        onCancel={() => { setShowAddProfile(false); setEditingProfile(null); }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </section>
-
-        {/* AI Persona Section */}
-        <section style={{ marginBottom: 32 }}>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>AI Persona & Instructions</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <label style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>System Prompt</label>
-            <textarea 
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              placeholder="e.g. You are a helpful assistant..."
-              style={{
-                background: 'rgba(0,0,0,0.2)',
-                border: '1px solid var(--peek-border)',
-                color: 'var(--peek-text)',
-                padding: '12px',
-                borderRadius: 6,
-                fontSize: 14,
-                outline: 'none',
-                fontFamily: 'var(--peek-font)',
-                minHeight: '100px',
-                resize: 'vertical'
-              }}
-            />
-            <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, lineHeight: 1.4 }}>
-              This prompt will be injected as hidden context into every new conversation you start.
-            </p>
-          </div>
-        </section>
-
-        {/* Plugins */}
-        <section style={{ marginBottom: 32 }}>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Plugins</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {(() => {
-              const ioPlugins = manifests.filter(m => m.plugin.type === 'input' || m.plugin.type === 'output');
-              const contextPlugins = manifests.filter(m => m.plugin.type === 'context');
-
-              if (ioPlugins.length === 0 && contextPlugins.length === 0) {
-                return (
-                  <p style={{ fontSize: 13, color: 'var(--peek-text-muted)', margin: 0 }}>
-                    No input, output, or context plugins found in <code>~/.config/peekaboo/plugins/</code>.
-                  </p>
-                );
-              }
-
-              return (
-                <>
-                  {ioPlugins.map((m) => {
-                    const isInput = m.plugin.type === 'input';
-                    const isEnabled = isInput
-                      ? enabledInputPlugins.includes(m.plugin.id)
-                      : enabledOutputPlugins.includes(m.plugin.id);
-
-                    return (
-                      <div key={m.plugin.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 14, fontWeight: 500 }}>{m.plugin.name}</span>
-                            <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4, color: 'var(--peek-text-muted)' }}>
-                              {m.plugin.type}
-                            </span>
-                          </div>
-                          <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
-                            Version {m.plugin.version} • ID: {m.plugin.id}
-                          </span>
-                        </div>
-
-                        <button
-                          onClick={() => {
-                            if (isInput) {
-                              toggleInputPlugin(m.plugin.id, !isEnabled);
-                            } else {
-                              toggleOutputPlugin(m.plugin.id, !isEnabled);
-                            }
-                          }}
-                          style={{
-                            width: 36, height: 20, borderRadius: 10,
-                            background: isEnabled ? '#4caf50' : 'rgba(255,255,255,0.1)',
-                            border: 'none', cursor: 'pointer', position: 'relative',
-                            transition: 'background 0.2s', padding: 0
-                          }}
-                        >
-                          <div style={{
-                            position: 'absolute', top: 2, left: isEnabled ? 18 : 2,
-                            width: 16, height: 16, borderRadius: 8, background: '#fff',
-                            transition: 'left 0.2s'
-                          }} />
-                        </button>
-                      </div>
-                    );
-                  })}
-
-                  {contextPlugins.length > 0 && (
-                    <>
-                      {ioPlugins.length > 0 && (
-                        <div style={{ height: '1px', background: 'var(--peek-border)', margin: '4px 0' }} />
-                      )}
-                      <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', margin: 0 }}>
-                        Context plugins are available via <code>/</code> commands.
-                      </p>
-                      {contextPlugins.map((m) => (
-                        <div key={m.plugin.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 14, fontWeight: 500 }}>{m.plugin.name}</span>
-                              <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 4, color: 'var(--peek-text-muted)' }}>
-                                context
-                              </span>
-                              {m.context?.command && (
-                                <span style={{ fontSize: 11, color: 'var(--peek-text-muted)' }}>
-                                  /{m.context.command}
-                                </span>
-                              )}
-                            </div>
-                            <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 4, display: 'block' }}>
-                              Version {m.plugin.version} • ID: {m.plugin.id}
-                            </span>
-                          </div>
-                          <span style={{ fontSize: 12, color: 'var(--peek-text-muted)' }}>Available</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
                 </>
-              );
-            })()}
-          </div>
-        </section>
+              )}
 
-        {/* Data & Privacy */}
-        <section>
-          <h3 style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--peek-text-muted)', letterSpacing: '0.05em', marginBottom: 12 }}>Data & Privacy</h3>
-          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--peek-border)', borderRadius: 8, padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 14 }}>History Retention</span>
-              <span style={{ fontSize: 13, color: 'var(--peek-text-secondary)' }}>{historyRetentionDays} Days</span>
+              {draftProvider === 'llama' && (
+                <>
+                  <div className="peek-form-row">
+                    <div className="peek-settings-row">
+                      <label className="peek-form-label">Server address</label>
+                      <span
+                        className={
+                          serverStatus === 'running'
+                            ? 'peek-form-hint peek-tone-ok'
+                            : serverStatus === 'starting'
+                              ? 'peek-form-hint peek-tone-warn'
+                              : serverStatus === 'error'
+                                ? 'peek-form-hint peek-tone-error'
+                                : 'peek-form-hint'
+                        }
+                      >
+                        <span className="peek-status-dot" />
+                        {serverStatus === 'running'
+                          ? 'Running'
+                          : serverStatus === 'starting'
+                            ? 'Starting…'
+                            : serverStatus === 'error'
+                              ? 'Failed to start'
+                              : 'Stopped'}
+                      </span>
+                    </div>
+                    <div className="peek-file-row">
+                      <input
+                        className="peek-field peek-field--mono"
+                        type="text"
+                        value={llamaBaseUrl}
+                        onChange={(e) => setLlamaBaseUrl(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      {serverStatus === 'running' ? (
+                        <button className="peek-btn peek-btn--danger peek-btn--sm" onClick={stop}>Stop</button>
+                      ) : activeProfile ? (
+                        <button className="peek-btn peek-btn--sm" onClick={() => launch(activeProfile)}>Start</button>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="peek-form-row">
+                    <div className="peek-settings-row">
+                      <label className="peek-form-label">Models</label>
+                      <button
+                        className="peek-btn peek-btn--sm"
+                        onClick={() => { setShowAddProfile(true); setEditingProfile(null); }}
+                      >
+                        Add a model
+                      </button>
+                    </div>
+
+                    {llamaProfiles.length === 0 && !showAddProfile && (
+                      <span className="peek-form-hint">No models set up yet. Add one to get started.</span>
+                    )}
+
+                    {llamaProfiles.map((p) => (
+                      <div
+                        key={p.id}
+                        className="peek-profile-row"
+                        data-active={activeLlamaProfileId === p.id ? 'true' : undefined}
+                      >
+                        <div style={{ minWidth: 0 }}>
+                          <div className="peek-settings-label">{p.name}</div>
+                          <div className="peek-form-hint">
+                            {p.modelPath.split(/[\\/]/).pop()} · {p.contextSize.toLocaleString()} token context
+                            {p.nGpuLayers > 0 ? ` · ${p.nGpuLayers} GPU layers` : ''}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
+                          {activeLlamaProfileId === p.id ? (
+                            <span className="peek-form-hint peek-tone-ok">In use</span>
+                          ) : (
+                            <button className="peek-btn peek-btn--sm" onClick={() => setActiveLlamaProfileId(p.id)}>Use</button>
+                          )}
+                          <button className="peek-btn peek-btn--sm" onClick={() => { setEditingProfile(p); setShowAddProfile(false); }}>Edit</button>
+                          <button
+                            className="peek-btn peek-btn--sm peek-btn--danger"
+                            aria-label={`Delete ${p.name}`}
+                            onClick={() => deleteLlamaProfile(p.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {(showAddProfile || editingProfile) && (
+                      <div className="peek-settings-card" style={{ marginBottom: 0 }}>
+                        <LlamaProfileEditor
+                          profile={editingProfile ?? undefined}
+                          onSave={() => { setShowAddProfile(false); setEditingProfile(null); }}
+                          onCancel={() => { setShowAddProfile(false); setEditingProfile(null); }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
-            <p style={{ fontSize: 12, color: 'var(--peek-text-muted)', lineHeight: 1.4 }}>
-              All conversations are securely saved to your local SQLite database. Peekaboo operates with zero telemetry and 100% offline capability.
+          </>
+        )}
+
+        {section === 'assistant' && (
+          <>
+            <h2 className="peek-settings-h2">Assistant</h2>
+            <p className="peek-settings-intro">
+              Standing instructions the assistant follows in every new conversation. You won't see
+              these in the transcript.
             </p>
-            <div style={{ height: 1, background: 'var(--peek-border)' }} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: 14, display: 'block' }}>Reset App</span>
-                <span style={{ fontSize: 12, color: 'var(--peek-text-muted)', marginTop: 2, display: 'block' }}>
-                  Clears all settings and re-runs setup on next launch.
-                </span>
+
+            <div className="peek-settings-card">
+              <div className="peek-form-row">
+                <label className="peek-form-label">Instructions</label>
+                <textarea
+                  className="peek-field peek-field--textarea"
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  placeholder="e.g. Answer briefly. Prefer examples over explanation."
+                  style={{ minHeight: 140 }}
+                />
               </div>
-              <button
-                onClick={async () => {
-                  if (window.confirm('Reset all settings? This cannot be undone.')) {
+            </div>
+          </>
+        )}
+
+        {section === 'plugins' && (
+          <>
+            <h2 className="peek-settings-h2">Plugins</h2>
+            <p className="peek-settings-intro">
+              Optional add-ons that pull in context, act on answers, or add a model provider. They
+              load from a folder on this machine — there's no store to browse.
+            </p>
+
+            <div className="peek-settings-card">
+              {manifests.length === 0 ? (
+                <>
+                  <span className="peek-settings-desc">
+                    Nothing installed. Peekaboo looks for plugins in{' '}
+                    <code>~/.config/peekaboo/plugins/</code>, one folder each containing a{' '}
+                    <code>plugin.toml</code>.
+                  </span>
+                  <span className="peek-settings-desc peek-tone-warn">
+                    Plugins run with full access to your files, clipboard and screen. Only install
+                    ones you trust.
+                  </span>
+                </>
+              ) : (
+                manifests.map((m, i) => {
+                  const type = m.plugin.type;
+                  const isInput = type === 'input';
+                  const isOutput = type === 'output';
+                  const isEnabled = isInput
+                    ? enabledInputPlugins.includes(m.plugin.id)
+                    : enabledOutputPlugins.includes(m.plugin.id);
+
+                  return (
+                    <React.Fragment key={m.plugin.id}>
+                      {i > 0 && <div className="peek-settings-divider" />}
+                      <div className="peek-settings-row">
+                        <span className="peek-settings-rowtext">
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="peek-settings-label">{m.plugin.name}</span>
+                            <span className="peek-badge">{type}</span>
+                            {type === 'context' && m.context?.command && (
+                              <span className="peek-form-hint">/{m.context.command}</span>
+                            )}
+                          </span>
+                          <span className="peek-settings-desc">
+                            {type === 'context'
+                              ? `Type /${m.context?.command ?? ''} in the overlay to use it.`
+                              : type === 'model'
+                                ? 'Selectable as a provider above.'
+                                : `Runs ${isInput ? 'before' : 'after'} each message.`}
+                            {' '}v{m.plugin.version}
+                          </span>
+                        </span>
+                        {(isInput || isOutput) && (
+                          <button
+                            className="peek-switch"
+                            role="switch"
+                            aria-checked={isEnabled}
+                            aria-label={`Enable ${m.plugin.name}`}
+                            onClick={() =>
+                              isInput
+                                ? toggleInputPlugin(m.plugin.id, !isEnabled)
+                                : toggleOutputPlugin(m.plugin.id, !isEnabled)
+                            }
+                          />
+                        )}
+                      </div>
+                    </React.Fragment>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
+
+        {section === 'data' && (
+          <>
+            <h2 className="peek-settings-h2">Data & privacy</h2>
+            <p className="peek-settings-intro">
+              Conversations are stored in a database file on this machine. Peekaboo collects no
+              telemetry. Note that if you pick a cloud provider, your messages are sent to that
+              provider to be answered.
+            </p>
+
+            <div className="peek-settings-card">
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Keep history for</span>
+                  <span className="peek-settings-desc">Older conversations are removed automatically.</span>
+                </span>
+                <div className="peek-segmented">
+                  {RETENTION_CHOICES.map((days) => (
+                    <button
+                      key={days}
+                      aria-pressed={historyRetentionDays === days}
+                      onClick={() => setHistoryRetentionDays(days)}
+                    >
+                      {days === 365 ? '1 year' : `${days} days`}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="peek-settings-card">
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Run setup again</span>
+                  <span className="peek-settings-desc">
+                    Walks through choosing a provider and model. Keeps everything you've configured.
+                  </span>
+                </span>
+                <button
+                  className="peek-btn peek-btn--secondary"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => invoke('show_setup_mode')}
+                >
+                  Open setup
+                </button>
+              </div>
+
+              <div className="peek-settings-divider" />
+
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Reset everything</span>
+                  <span className="peek-settings-desc">
+                    Erases all settings, API keys and model profiles, then reopens setup. Cannot be
+                    undone.
+                  </span>
+                </span>
+                <button
+                  className="peek-btn peek-btn--danger"
+                  style={{ flexShrink: 0 }}
+                  onClick={async () => {
+                    if (!window.confirm('Erase all settings, API keys and model profiles? This cannot be undone.')) return;
                     localStorage.clear();
                     await invoke('reset_and_show_setup');
                     const { getCurrentWebviewWindow } = await import('@tauri-apps/api/webviewWindow');
                     getCurrentWebviewWindow().close();
-                  }
-                }}
-                style={{ padding: '6px 14px', background: 'rgba(244,67,54,0.1)', color: '#f44336', border: '1px solid rgba(244,67,54,0.3)', borderRadius: 6, fontSize: 13, cursor: 'pointer', fontFamily: 'var(--peek-font)', whiteSpace: 'nowrap' }}
-              >
-                Reset
-              </button>
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
+
+            <button
+              className="peek-link-btn"
+              onClick={() => openUrl('https://github.com/aahil-khan/peekaboo').catch(() => {})}
+            >
+              Peekaboo on GitHub ↗
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

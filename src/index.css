@@ -1474,6 +1474,250 @@ html[data-window='peek'] {
   color: var(--peek-text-muted);
 }
 
+/* ═══ Settings Window ═══════════════════════════════════════════════════ */
+
+.peek-settings {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  background: var(--peek-bg-solid);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  user-select: none;
+}
+
+.peek-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  width: 172px;
+  padding: var(--peek-space-4) var(--peek-space-2);
+  border-right: 1px solid var(--peek-border);
+  overflow-y: auto;
+}
+
+.peek-settings-brand {
+  padding: 0 var(--peek-space-2) var(--peek-space-3);
+  font-size: var(--peek-text-base);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.peek-settings-navbtn {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  width: 100%;
+  padding: 7px var(--peek-space-2);
+  border: none;
+  border-radius: var(--peek-radius-sm);
+  background: transparent;
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.peek-settings-navbtn:hover {
+  background: var(--peek-hover);
+  color: var(--peek-text);
+}
+
+.peek-settings-navbtn[aria-current='page'] {
+  background: var(--peek-accent-soft);
+  color: var(--peek-accent);
+  font-weight: 500;
+}
+
+.peek-settings-body {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--peek-space-5) var(--peek-space-5) var(--peek-space-6);
+}
+
+.peek-settings-h2 {
+  font-size: var(--peek-text-xl);
+  font-weight: 600;
+  margin-bottom: var(--peek-space-1);
+}
+
+.peek-settings-intro {
+  font-size: var(--peek-text-base);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+  margin-bottom: var(--peek-space-4);
+}
+
+.peek-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--peek-space-4);
+  padding: var(--peek-space-4);
+  margin-bottom: var(--peek-space-4);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-md);
+  background: var(--peek-surface-1);
+}
+
+.peek-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peek-space-4);
+}
+
+.peek-settings-rowtext {
+  min-width: 0;
+}
+
+.peek-settings-label {
+  display: block;
+  font-size: var(--peek-text-md);
+}
+
+.peek-settings-desc {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
+}
+
+.peek-settings-divider {
+  height: 1px;
+  background: var(--peek-border);
+}
+
+/* Segmented control (theme mode, retention). */
+.peek-segmented {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-input-bg);
+}
+
+.peek-segmented button {
+  padding: 4px var(--peek-space-3);
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.peek-segmented button:hover {
+  color: var(--peek-text);
+}
+
+.peek-segmented button[aria-pressed='true'] {
+  background: var(--peek-accent);
+  color: var(--peek-accent-contrast);
+  font-weight: 500;
+}
+
+/* Accent swatches.
+   Each button carries its own data-accent, which makes the [data-accent]
+   blocks at the top of this file set that accent's channels locally — so the
+   swatch paints itself with no extra colour literals. */
+.peek-swatches {
+  display: inline-flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.peek-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  background: rgb(var(--peek-accent-d));
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+[data-theme='light'] .peek-swatch {
+  background: rgb(var(--peek-accent-l));
+}
+
+.peek-swatch:hover {
+  transform: scale(1.1);
+}
+
+.peek-swatch[aria-pressed='true'] {
+  box-shadow: 0 0 0 2px var(--peek-bg-solid), 0 0 0 4px currentColor;
+}
+
+.peek-swatch:focus-visible {
+  outline: 2px solid var(--peek-text);
+  outline-offset: 2px;
+}
+
+/* Provider picker pills. */
+.peek-provider-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.peek-provider-pill {
+  padding: 4px var(--peek-space-3);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-surface-2);
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-base);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-provider-pill:hover {
+  color: var(--peek-text);
+  border-color: var(--peek-border-focus);
+}
+
+/* Selected but not yet verified — a draft. */
+.peek-provider-pill[aria-pressed='true'] {
+  background: var(--peek-accent-soft);
+  border-color: var(--peek-accent);
+  color: var(--peek-accent);
+}
+
+/* The provider actually in use. */
+.peek-provider-pill[data-active='true'] {
+  background: var(--peek-success-soft);
+  border-color: var(--peek-success-line);
+  color: var(--peek-success);
+}
+
+.peek-profile-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--peek-space-3);
+  padding: var(--peek-space-2) var(--peek-space-3);
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-input-bg);
+}
+
+.peek-profile-row[data-active='true'] {
+  border-color: var(--peek-success-line);
+  background: var(--peek-success-soft);
+}
+
 /* ═══ Setup Wizard ══════════════════════════════════════════════════════ */
 
 .peek-link-btn {
