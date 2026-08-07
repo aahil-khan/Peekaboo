@@ -32,6 +32,9 @@ toml = "0.8"
 # config directory on first run. A copy would silently go stale on upgrade.
 include_dir = "0.7"
 sysinfo = "0.33"
+# Text extraction for /file. Parses documents Peekaboo did not produce and
+# panics on some malformed ones, so every call is wrapped in catch_unwind.
+pdf-extract = "0.12"
 
 # Screen capture goes through xdg-desktop-portal. GNOME 50 denies the private
 # org.gnome.Shell.Screenshot API ("ScreenshotArea is not allowed"), so the

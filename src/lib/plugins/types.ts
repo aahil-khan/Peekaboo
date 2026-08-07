@@ -47,6 +47,16 @@ export interface FileMatch {
   name: string;
 }
 
+export interface LoadedFile {
+  /** 'image/png', 'text/plain', … — pass straight through as a fragment type. */
+  media_type: string;
+  encoding: 'utf8' | 'base64';
+  content: string;
+  truncated: boolean;
+  /** Present when the text was derived rather than read, e.g. 'pdf'. */
+  extracted_from?: string;
+}
+
 export interface PluginContext {
   pluginId: string;
   settings: Record<string, any>;
@@ -71,6 +81,13 @@ export interface PluginContext {
    */
   readFile: (path: string) => Promise<string>;
   writeFile: (path: string, text: string) => Promise<void>;
+  /**
+   * Load a file for attachment, choosing its representation by type: images
+   * base64-encoded for vision models, PDFs as extracted text, everything else
+   * as UTF-8. Rejects with a human-readable reason for formats it cannot
+   * handle, so a plugin can say why rather than fail silently.
+   */
+  loadFile: (path: string) => Promise<LoadedFile>;
 }
 
 export interface InputPluginModule {

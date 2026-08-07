@@ -1,13 +1,21 @@
 /**
- * /file — find a file by name and attach its contents.
+ * /file — find a file by name and attach it.
  *
  * Search is delegated to the host (ctx.searchFiles), which walks your home
- * directory under the same allowlist that governs ctx.readFile: dotfiles and
+ * directory under the same allowlist that governs reads: dotfiles and
  * dot-directories are skipped, so this cannot surface ~/.ssh or ~/.aws.
  *
- * Binary files are refused rather than attached as mojibake, and large files
- * are truncated — a 40 MB log pasted into a prompt is not a useful question,
- * and silently blowing the context window is a confusing way to fail.
+ * What can be attached, decided by ctx.loadFile:
+ *
+ *   - UTF-8 text of any kind, truncated past 512 KB
+ *   - PNG, JPEG, GIF, WebP and BMP, sent to the model as images (needs a
+ *     vision model, and a scanned page is an image, not text)
+ *   - PDFs, as extracted text — which fails on a PDF that is a scan, since
+ *     there is no text in it to extract
+ *
+ * Anything else is refused with a reason. Refusing loudly matters here: the
+ * earlier version returned an empty fragment list on failure, so picking a PDF
+ * looked exactly like the app ignoring the click.
  */
 
 const MAX_BYTES = 128 * 1024;
@@ -63,36 +71,39 @@ export default {
   },
 
   resolve: async (itemId, ctx) => {
-    let text;
-    try {
-      text = await ctx.readFile(itemId);
-    } catch (err) {
-      ctx.logger.warn(`Could not read ${itemId}:`, err);
-      return [];
-    }
-
-    // The host rejects invalid UTF-8 outright, so anything arriving here is
-    // text — but a stray NUL still means we are looking at a binary blob.
-    if (text.includes('\u0000')) {
-      ctx.logger.warn(`${itemId} looks binary; not attaching.`);
-      return [];
-    }
-
-    let truncated = false;
-    if (text.length > MAX_BYTES) {
-      text = text.slice(0, MAX_BYTES);
-      truncated = true;
-    }
-
     const name = itemId.split('/').pop() || itemId;
+
+    let file;
+    try {
+      file = await ctx.loadFile(itemId);
+    } catch (err) {
+      // Returning [] here would attach nothing and say nothing, which reads as
+      // the app ignoring the pick. The host's message explains the real reason
+      // — unsupported format, too large, a scanned PDF — so surface it.
+      ctx.logger.warn(`Could not load ${itemId}:`, err);
+      await ctx.notify(`Can't attach ${name}`, String(err));
+      return [];
+    }
+
+    const isImage = file.media_type.startsWith('image/');
+    let content = file.content;
+
+    // Never append a note to base64: it is the payload, not prose.
+    if (!isImage && file.truncated) {
+      content += `\n\n[truncated \u2014 the first ${Math.round(MAX_BYTES / 1024)} KB of ${home(itemId)}]`;
+    }
+
     return [{
       id: itemId,
-      type: 'text/plain',
-      label: name,
-      content: truncated
-        ? `${text}\n\n[truncated — showing the first ${MAX_BYTES / 1024} KB of ${home(itemId)}]`
-        : text,
-      metadata: { path: itemId, truncated },
+      type: file.media_type,
+      label: file.extracted_from === 'pdf' ? `${name} (extracted text)` : name,
+      content,
+      metadata: {
+        path: itemId,
+        truncated: file.truncated,
+        encoding: file.encoding,
+        extractedFrom: file.extracted_from,
+      },
     }];
   },
 };

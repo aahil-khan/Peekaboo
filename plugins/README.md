@@ -93,11 +93,36 @@ ctx.getSystemInfo()     { cpu, memory, disks } — measured on call
 ctx.searchFiles(query)  [{ path, name }] under $HOME, allowlisted
 ctx.readFile(path)      UTF-8 only; allowlisted
 ctx.writeFile(path, s)  allowlisted
+ctx.loadFile(path)      { media_type, encoding, content, truncated }
 ctx.captureRegion()     interactive region capture, base64 PNG
 ctx.notify(title, body)
 ctx.typeText(s)         not yet implemented
 ctx.getActiveWindow()   not available on GNOME Wayland — see the README
 ```
+
+### Attaching files
+
+`readFile` is a plain UTF-8 read and fails on anything else. To attach a file
+whose type you do not control, use `loadFile`, which picks a representation:
+
+| Input | `media_type` | `encoding` |
+| --- | --- | --- |
+| UTF-8 text | `text/plain` | `utf8` |
+| PNG, JPEG, GIF, WebP, BMP | `image/*` | `base64` |
+| PDF | `text/plain` | `utf8` (with `extracted_from: 'pdf'`) |
+| Anything else | rejects with a reason | |
+
+Return the `media_type` as your fragment's `type` and the host routes it: an
+`image/*` fragment reaches the model as an image, and is refused with a toast
+when the selected model has no vision support.
+
+Text is truncated past 512 KB and images are capped at 8 MB. A PDF that is a
+scan has no text to extract, so it rejects — attach the page as an image
+instead.
+
+Reject loudly. Returning `[]` from `resolve` attaches nothing and says nothing,
+which is indistinguishable from the app ignoring the click; `ctx.notify` is
+there for exactly this.
 
 ### Filesystem access is scoped
 

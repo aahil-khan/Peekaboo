@@ -674,11 +674,25 @@ export const PeekSurface: React.FC = () => {
                 onSubmit={handleSubmit}
                 onAbort={abortStream}
                 onAttachFragment={(f) => {
+                  // A fragment's type is its media type. Hardcoding text/plain
+                  // here meant an image fragment — /file on a PNG — reached the
+                  // model as a wall of base64 instead of a picture.
+                  const mediaType = f.type?.includes('/') ? f.type : 'text/plain';
+
+                  if (mediaType.startsWith('image/') && !isVisionModel) {
+                    setToast({
+                      type: 'error',
+                      text: `${activeModel || 'This model'} can't read images — switch to a vision model with Alt+M.`,
+                    });
+                    setTimeout(() => setToast(null), 4000);
+                    return;
+                  }
+
                   addAttachment({
                     type: 'plugin',
                     label: f.label || f.id || 'Context',
                     content: f.content,
-                    mediaType: 'text/plain',
+                    mediaType,
                   });
                 }}
                 onAttachImage={isVisionModel ? (base64, mediaType) => {

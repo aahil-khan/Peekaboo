@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
-import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule, SystemInfo, FileMatch } from './types';
+import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule, SystemInfo, FileMatch, LoadedFile } from './types';
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
@@ -84,6 +84,8 @@ export class PluginRegistry {
         invoke<string>('plugin_read_file', { pluginId: manifest.plugin.id, path }),
       writeFile: async (path: string, text: string) =>
         invoke<void>('plugin_write_file', { pluginId: manifest.plugin.id, path, text }),
+      loadFile: async (path: string) =>
+        invoke<LoadedFile>('plugin_load_file', { pluginId: manifest.plugin.id, path }),
     };
   }
 
