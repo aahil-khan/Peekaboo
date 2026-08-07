@@ -2,7 +2,8 @@
 name = "peekaboo-app"
 version = "0.1.0"
 description = "Peekaboo — instant AI overlay"
-authors = ["you"]
+authors = ["Aahil Khan"]
+license = "MIT"
 edition = "2021"
 
 [lib]

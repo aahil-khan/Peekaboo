@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Claude Code's per-project state, including its worktrees. Local to one
+# machine and one person; nothing here is shared.
+.claude/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -158,4 +158,4 @@ Windows and macOS aren't currently targeted. Screen capture is Linux-only today.
 
 ## License
 
-Not yet specified.
+MIT — see [LICENSE](LICENSE).
