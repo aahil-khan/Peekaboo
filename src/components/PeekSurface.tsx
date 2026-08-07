@@ -6,6 +6,7 @@ import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 import { Input } from './Input';
 import { Transcript } from './Transcript';
+import { Footer, type FooterStatus } from './Footer';
 import { History } from './History';
 import { Models } from './Models';
 import { Legend } from './Legend';
@@ -16,6 +17,7 @@ import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { togglePanel } from '../hooks/usePanels';
 import { useAttachments, type Attachment } from '../hooks/useAttachments';
 import { registry } from '../lib/plugins/registry';
 import { usePluginsStore } from '../store/plugins';
@@ -206,7 +208,11 @@ export const PeekSurface: React.FC = () => {
 
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        const height = Math.min(Math.max(entry.contentRect.height + 2, 80), 520);
+        // Floor 86 = input 52 + footer 34, the height of an empty overlay, and
+        // the same value as tauri.conf.json's window height. Ceiling 520 pairs
+        // with .peek-surface's 518px cap and --peek-transcript-max; see the
+        // height-budget note in index.css before changing any of them.
+        const height = Math.min(Math.max(entry.contentRect.height + 2, 86), 520);
         invoke('resize_peek', { width: 660, height });
       }
     });
@@ -522,6 +528,51 @@ export const PeekSurface: React.FC = () => {
     setHasActiveModalHeight(true);
   }, []);
 
+  const { overlayTourSeen, setOverlayTourSeen } = useSettingsStore();
+  const showFirstRunHint = !overlayTourSeen && !hasConversation && attachments.length === 0;
+
+  /*
+   * What the footer says about the current provider.
+   *
+   * The old status bar rendered nothing for 'checking' and nothing for
+   * "connected but no model" — the two states a fresh install spends most of
+   * its time in — so the user's first signal that anything was wrong was a
+   * three-second toast after they'd already typed a question. Every state now
+   * says something, and the ones the user can act on are clickable.
+   *
+   * Returning null is deliberate for the healthy case: the model pill beside
+   * it already carries that information.
+   */
+  const footerStatus = useMemo<FooterStatus | null>(() => {
+    const openSettings = () => { invoke('open_settings'); };
+    const pickModel = () => togglePanel('models');
+
+    if (activeProvider === 'llama') {
+      if (serverStatus === 'starting') return { tone: 'warn', text: 'Starting llama.cpp server…' };
+      if (serverStatus === 'error') return { tone: 'error', text: 'llama.cpp server failed to start', onClick: openSettings };
+      if (serverStatus === 'stopped') return { tone: 'muted', text: 'llama.cpp server stopped', onClick: openSettings };
+      if (!activeModel) return { tone: 'warn', text: 'No model selected', onClick: pickModel };
+      return null;
+    }
+
+    if (providerStatus === 'checking') {
+      return { tone: 'muted', text: `Connecting to ${provider.name}…` };
+    }
+    if (providerStatus === 'disconnected') {
+      return {
+        tone: 'error',
+        text: activeProvider === 'ollama'
+          ? 'Ollama not detected — is it running?'
+          : `Can't reach ${provider.name} — check your API key`,
+        onClick: openSettings,
+      };
+    }
+    if (!activeModel) {
+      return { tone: 'warn', text: 'No model selected', onClick: pickModel };
+    }
+    return null;
+  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name]);
+
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
   const { isOpen: isHistoryOpen } = useHistoryStore();
@@ -596,73 +647,19 @@ export const PeekSurface: React.FC = () => {
                 }}
               />
 
-              {/* Status bar */}
-              <div className="peek-statusbar">
-                <div className="peek-status-left">
-                  {activeProvider === 'llama' ? (
-                    <>
-                      {serverStatus === 'starting' && (
-                        <span className="peek-status-error peek-status-warn">
-                          Starting llama server…
-                        </span>
-                      )}
-                      {serverStatus === 'error' && (
-                        <span className="peek-status-error">llama server failed to start</span>
-                      )}
-                      {serverStatus === 'running' && activeModel && (
-                        <span className="peek-status-model">
-                          <span className="peek-status-dot peek-status-ok" />
-                          {activeModel}
-                        </span>
-                      )}
-                      {serverStatus === 'stopped' && (
-                        <span className="peek-status-error peek-status-muted">
-                          llama server stopped
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      {providerStatus === 'disconnected' && (
-                        <span className="peek-status-error">
-                          {activeProvider === 'ollama' ? 'Ollama not detected — is it running?' :
-                           activeProvider === 'llama' ? 'llama.cpp server disconnected' :
-                           `${provider.name} connection failed — check API key`}
-                        </span>
-                      )}
-                      {providerStatus === 'connected' && activeModel && (
-                        <span className="peek-status-model">{activeModel}</span>
-                      )}
-                    </>
-                  )}
+              {/* First-run orientation, dismissed for good once acknowledged. */}
+              {showFirstRunHint && (
+                <div className="peek-hint">
+                  <div className="peek-hint-items">
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Enter</kbd> to ask</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Alt+/</kbd> all shortcuts</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Esc</kbd> to hide</span>
+                  </div>
+                  <button className="peek-hint-dismiss" onClick={() => setOverlayTourSeen(true)}>
+                    Got it
+                  </button>
                 </div>
-                <div className="peek-status-right" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AnimatePresence>
-                    {toast && (
-                      <motion.span
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        className={`peek-toast ${toast.type === 'success' ? 'peek-toast--success' : 'peek-toast--error'}`}
-                      >
-                        {toast.type === 'success' ? (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
-                          </svg>
-                        ) : (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="12" y1="8" x2="12" y2="12"></line>
-                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                          </svg>
-                        )}
-                        {toast.text}
-                      </motion.span>
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
+              )}
 
               {/* Conversation transcript. Keyed on the session so switching
                   history entries remounts cleanly at the bottom. */}
@@ -677,8 +674,21 @@ export const PeekSurface: React.FC = () => {
                   />
                 )}
               </AnimatePresence>
+
+              {/* Persistent action bar. Absorbed the old status bar, which
+                  rendered nothing at all during the provider check or when no
+                  model was picked — a blank band on the cold-start path. */}
+              <Footer
+                onNewChat={handleClear}
+                onCaptureRegion={handleCaptureRegion}
+                captureDisabledReason={isVisionModel ? null : 'Screen capture needs a vision model'}
+                onOpenSettings={() => invoke('open_settings')}
+                status={footerStatus}
+                toast={toast}
+                modelLabel={activeModel || null}
+              />
             </div>
-            
+
             {/* History Panel */}
             <History onSelectSession={handleSelectSession} />
             

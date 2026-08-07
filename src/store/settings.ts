@@ -52,6 +52,8 @@ interface SettingsState {
   autoCopyOnHide: boolean;
   themeMode: ThemeMode;
   themeAccent: ThemeAccent;
+  /** Whether the first-run orientation strip in the overlay has been dismissed. */
+  overlayTourSeen: boolean;
   openaiApiKey: string;
   openaiBaseUrl: string;
   anthropicApiKey: string;
@@ -61,6 +63,7 @@ interface SettingsState {
   setHistoryRetentionDays: (v: number) => void;
   setThemeMode: (v: ThemeMode) => void;
   setThemeAccent: (v: ThemeAccent) => void;
+  setOverlayTourSeen: (v: boolean) => void;
   setActiveProvider: (v: string) => void;
   setActiveModel: (v: string) => void;
   setOllamaBaseUrl: (v: string) => void;
@@ -98,6 +101,7 @@ export const useSettingsStore = create<SettingsState>()(
       // what an existing install already looks like. Following the OS is opt-in.
       themeMode: 'dark',
       themeAccent: 'indigo',
+      overlayTourSeen: false,
       openaiApiKey: '',
       openaiBaseUrl: 'https://api.openai.com/v1',
       anthropicApiKey: '',
@@ -107,6 +111,7 @@ export const useSettingsStore = create<SettingsState>()(
       setHistoryRetentionDays: (v) => set({ historyRetentionDays: v }),
       setThemeMode: (v) => set({ themeMode: v }),
       setThemeAccent: (v) => set({ themeAccent: v }),
+      setOverlayTourSeen: (v) => set({ overlayTourSeen: v }),
       setActiveProvider: (v) => set({ activeProvider: v }),
       setActiveModel: (v) => set({ activeModel: v }),
       setOllamaBaseUrl: (v) => set({ ollamaBaseUrl: v }),

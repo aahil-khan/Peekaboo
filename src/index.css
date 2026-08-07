@@ -43,10 +43,17 @@
   --peek-radius-lg: 16px;
 
   /* Geometry.
-   * --peek-transcript-max is coupled to .peek-surface's max-height and to the
-   * clamp in PeekSurface.tsx's ResizeObserver. All three must agree, or the
-   * transcript silently clips instead of scrolling. See Transcript.tsx. */
-  --peek-transcript-max: 430px;
+   *
+   * The height budget, which four places must agree on:
+   *   input 52 + footer 34 + transcript 396 + attachments ~34 = 516
+   * against .peek-surface's max-height of 518 and the 520 clamp in
+   * PeekSurface.tsx's ResizeObserver. The empty overlay is 52 + 34 = 86,
+   * which is also tauri.conf.json's window height and the clamp's floor.
+   *
+   * If the transcript cap exceeds this budget it does not simply overflow:
+   * .peek-surface is overflow:hidden, so the content clips instead of
+   * scrolling, and only once a conversation is a few turns long. */
+  --peek-transcript-max: 396px;
   --peek-footer-h: 34px;
 
   /* Fonts */
@@ -915,52 +922,10 @@ html[data-window='peek'] {
   background: var(--peek-surface-3);
 }
 
-/* ═══ Status Bar ════════════════════════════════════════════════════════ */
+/* ═══ Status ════════════════════════════════════════════════════════════ */
 
-.peek-statusbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--peek-space-2);
-  padding: 6px var(--peek-space-4);
-  min-height: 28px;
-}
-
-.peek-status-left,
-.peek-status-right {
-  display: flex;
-  align-items: center;
-  gap: var(--peek-space-2);
-  min-width: 0;
-}
-
-.peek-status-model {
-  font-size: var(--peek-text-xs);
-  font-weight: 500;
-  color: var(--peek-text-muted);
-  padding: 2px var(--peek-space-2);
-  border-radius: var(--peek-radius-xs);
-  background: var(--peek-badge-bg);
-  letter-spacing: 0.01em;
-}
-
-.peek-status-error {
-  font-size: var(--peek-text-xs);
-  color: var(--peek-error);
-  font-weight: 500;
-}
-
-.peek-bg-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--peek-text-xs);
-  color: var(--peek-accent);
-  font-weight: 500;
-}
-
-/* Small state dot; takes its colour from the parent so one class covers
-   running / starting / stopped. */
+/* Small state dot; takes its colour from the parent's .peek-tone-* class so
+   one rule covers connecting / running / stopped / failed. */
 .peek-status-dot {
   display: inline-block;
   width: 6px;
@@ -969,11 +934,8 @@ html[data-window='peek'] {
   border-radius: 50%;
   background: currentColor;
   vertical-align: middle;
+  flex-shrink: 0;
 }
-
-.peek-status-warn { color: var(--peek-warning); }
-.peek-status-muted { color: var(--peek-text-muted); }
-.peek-status-ok { color: var(--peek-success); }
 
 .peek-toast {
   display: flex;
@@ -1344,13 +1306,19 @@ html[data-window='peek'] {
 
 /* ═══ Overlay Panels ════════════════════════════════════════════════════ */
 
-/* Shared by History, Models, Legend and the Memory overlay. */
+/*
+ * Shared by History, Models, Legend and the Memory overlay.
+ *
+ * Stops short of the footer rather than covering the whole surface, so the
+ * action bar — including the button that opened the panel — stays visible and
+ * clickable while it's up.
+ */
 .peek-history {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--peek-footer-h);
   display: flex;
   flex-direction: column;
   background: var(--peek-panel-bg);
@@ -1504,6 +1472,160 @@ html[data-window='peek'] {
 .peek-history-item-time {
   font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
+}
+
+/* ═══ Footer Action Bar ═════════════════════════════════════════════════ */
+
+.peek-footer {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: var(--peek-footer-h);
+  padding: 0 6px;
+  border-top: 1px solid var(--peek-border);
+  /* Above .peek-history (z-index 10) so the bar stays usable while a panel is
+     open — the panels stop short of it, see .peek-history's bottom offset. */
+  position: relative;
+  z-index: 11;
+}
+
+.peek-footer-btn {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+/* Pressed state for the panel toggles. */
+.peek-icon-btn[aria-pressed='true'] {
+  color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+}
+
+/* Takes the slack, so the trailing controls sit hard right. */
+.peek-footer-status {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--peek-space-2);
+  overflow: hidden;
+}
+
+.peek-footer-statustext {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+}
+
+.peek-footer-statustext:not(:disabled) {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: text-decoration-color 0.12s ease, background 0.12s ease;
+}
+
+.peek-footer-statustext:not(:disabled):hover {
+  background: var(--peek-hover);
+  text-decoration-color: currentColor;
+}
+
+.peek-tone-ok { color: var(--peek-success); }
+.peek-tone-warn { color: var(--peek-warning); }
+.peek-tone-error { color: var(--peek-error); }
+.peek-tone-muted { color: var(--peek-text-muted); }
+
+.peek-footer-model {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 190px;
+  padding: 3px var(--peek-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--peek-radius-xs);
+  background: var(--peek-badge-bg);
+  color: var(--peek-text-secondary);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+}
+
+.peek-footer-model:hover {
+  color: var(--peek-text);
+  background: var(--peek-surface-3);
+}
+
+.peek-footer-model:focus-visible {
+  outline: none;
+  border-color: var(--peek-accent);
+}
+
+/* No model configured is the most likely fresh-install state and used to be
+   the least signposted — give it the accent so it reads as the next step. */
+.peek-footer-model--empty {
+  color: var(--peek-accent);
+  background: var(--peek-accent-soft);
+  border-color: var(--peek-accent-line);
+}
+
+/* ═══ First-run hint ════════════════════════════════════════════════════ */
+
+.peek-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  padding: var(--peek-space-2) var(--peek-space-4) var(--peek-space-3);
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+}
+
+.peek-hint-items {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-3);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.peek-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.peek-hint-dismiss {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  color: var(--peek-text-muted);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-xs);
+  cursor: pointer;
+}
+
+.peek-hint-dismiss:hover {
+  color: var(--peek-text);
+  background: var(--peek-hover);
 }
 
 /* ═══ Legend ════════════════════════════════════════════════════════════ */
