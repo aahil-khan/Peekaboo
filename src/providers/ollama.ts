@@ -74,6 +74,10 @@ export class OllamaProvider implements Provider {
       body: JSON.stringify({ model, messages: mappedMessages, stream: true, keep_alive: "5s" }),
     });
 
+    if (signal?.aborted) {
+      throw new DOMException('Aborted by user', 'AbortError');
+    }
+
     if (!res.ok) {
       throw new Error(`Ollama error: ${res.status} ${res.statusText}`);
     }
@@ -82,8 +86,23 @@ export class OllamaProvider implements Provider {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        reader.cancel().catch(() => {});
+      });
+    }
+
     while (true) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted by user', 'AbortError');
+      }
+
       const { done, value } = await reader.read();
+
+      if (signal?.aborted) {
+        throw new DOMException('Aborted by user', 'AbortError');
+      }
+
       if (done) break;
 
       // Accumulate buffer to handle partial JSON lines across chunks
