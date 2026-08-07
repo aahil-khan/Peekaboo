@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule, SystemInfo, FileMatch } from './types';
 
 export class PluginRegistry {
@@ -64,8 +65,12 @@ export class PluginRegistry {
         error: (...args) => console.error(`[Plugin:${manifest.plugin.id}]`, ...args),
       },
       getSelection: async () => invoke<string>('plugin_get_selection').catch(() => ''),
-      getClipboard: async () => navigator.clipboard.readText(),
-      writeClipboard: async (text: string) => navigator.clipboard.writeText(text),
+      // Not navigator.clipboard: WebKitGTK rejects reads outside a user
+      // gesture, so a plugin asking for the clipboard from search() always got
+      // a NotAllowedError. The Tauri plugin talks to the system clipboard
+      // directly and has no such restriction.
+      getClipboard: async () => readText(),
+      writeClipboard: async (text: string) => writeText(text),
       getActiveWindow: async () => invoke<{ title: string; app: string }>('get_active_window'),
       captureRegion: async () => invoke<string>('capture_region'),
       typeText: async (text: string) => invoke<void>('type_text', { text }),

@@ -29,6 +29,7 @@ function nextSelectableIndex(items: MenuItem[], from: number, direction: 1 | -1)
 
 export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachFragment, onPasteReject, onAbort }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const slashMenuRef = useRef<HTMLDivElement>(null);
   const { input, setInput, isStreaming, visible } = usePeekStore();
 
   const [slashState, setSlashState] = useState<{
@@ -195,6 +196,25 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
     }
   }, [slashState.active, slashState.phase, slashState.pluginId, slashState.pluginQuery]);
 
+  // The menu is a fixed-height scroller, so moving the selection has to bring
+  // the new row with it — otherwise the highlight walks off the bottom and the
+  // arrow keys look like they have stopped working.
+  //
+  // 'nearest' rather than 'center': a row reached by hovering is visible by
+  // definition, so this becomes a no-op for mouse-driven selection instead of
+  // yanking the list out from under the pointer.
+  useEffect(() => {
+    if (!slashState.active) return;
+    const selected = slashMenuRef.current?.querySelector('[aria-selected="true"]');
+    selected?.scrollIntoView({ block: 'nearest' });
+  }, [
+    slashState.active,
+    slashState.phase,
+    slashState.selectedIndex,
+    slashState.menuItems,
+    slashState.manifests,
+  ]);
+
   const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (slashState.active) {
       // The menu activates on any leading '/', including ordinary text like a
@@ -202,10 +222,13 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
       // fall through to the textarea — otherwise a message such as
       // "/etc/fstab explain this" can never be sent, and the arrow keys stop
       // working inside it.
+      // Selectable, not merely present: a plugin reporting "nothing found"
+      // does so with a non-selectable group row, and the arrow keys should
+      // still reach the textarea in that case.
       const hasResults =
         slashState.phase === 1
           ? slashState.manifests.length > 0
-          : slashState.menuItems.length > 0;
+          : slashState.menuItems.some((i) => i.kind !== 'group');
 
       if (hasResults && e.key === 'ArrowDown') {
         e.preventDefault();
@@ -332,7 +355,7 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
 
       {/* Shared Command Menu UI */}
       {slashState.active && (
-        <div className="peek-slash-menu" role="listbox">
+        <div className="peek-slash-menu" role="listbox" ref={slashMenuRef}>
           {slashState.phase === 1 &&
             (slashState.manifests.length === 0 ? (
               <div className="peek-slash-empty">

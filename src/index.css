@@ -960,6 +960,9 @@ html[data-window='peek'] {
   gap: var(--peek-space-3);
   position: relative;
   width: 100%;
+  /* Backstop: whatever a plugin puts in a row, it cannot escape the row. */
+  min-width: 0;
+  overflow: hidden;
   padding: 6px var(--peek-space-3);
   border: none;
   border-radius: var(--peek-radius-sm);
@@ -994,6 +997,7 @@ html[data-window='peek'] {
 }
 
 .peek-slash-item-title {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1001,12 +1005,18 @@ html[data-window='peek'] {
 }
 
 /* Meta sits at the end of the row rather than under the title — vertical
-   space in the overlay is the scarce resource. */
+   space in the overlay is the scarce resource.
+ *
+ * It must stay shrinkable. With flex-shrink: 0 a long value refuses to
+ * compress, the auto margin has no free space left to distribute, and the text
+ * runs past the end of the row — where .peek-surface clips it mid-word rather
+ * than ellipsising it. File paths hit this immediately. */
 .peek-slash-item-subtitle {
   margin-left: auto;
   padding-left: var(--peek-space-2);
-  flex-shrink: 0;
-  max-width: 45%;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 55%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

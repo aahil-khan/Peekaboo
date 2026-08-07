@@ -18,6 +18,16 @@ function home(path) {
   return h ? `~${path.slice(h[0].length)}` : path;
 }
 
+/**
+ * The row already shows the filename as its title, so repeating the whole path
+ * in the subtitle wastes the width and pushes long names off the edge. The
+ * directory is the part that actually disambiguates two similarly named files.
+ */
+function directory(path) {
+  const cut = path.lastIndexOf('/');
+  return home(cut > 0 ? path.slice(0, cut) : path);
+}
+
 export default {
   type: 'context',
 
@@ -47,7 +57,7 @@ export default {
     return results.map((f) => ({
       id: f.path,
       title: f.name,
-      subtitle: home(f.path),
+      subtitle: directory(f.path),
       icon: 'file',
     }));
   },
