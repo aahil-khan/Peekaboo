@@ -579,9 +579,33 @@ export const PeekSurface: React.FC = () => {
    * Returning null is deliberate for the healthy case: the model pill beside
    * it already carries that information.
    */
+  /*
+   * Escape during a stream doesn't cancel it — the answer keeps generating in
+   * the background and fires a desktop notification when it lands. Nothing
+   * said so, so a slow answer just looked like the app had hung. Surfaced only
+   * once the wait is long enough to be worth mentioning.
+   */
+  const [longWait, setLongWait] = useState(false);
+  useEffect(() => {
+    if (!isStreaming) {
+      setLongWait(false);
+      return;
+    }
+    const timer = setTimeout(() => setLongWait(true), 9000);
+    return () => clearTimeout(timer);
+  }, [isStreaming]);
+
   const footerStatus = useMemo<FooterStatus | null>(() => {
     const openSettings = () => { invoke('open_settings'); };
     const pickModel = () => togglePanel('models');
+
+    if (isStreaming && longWait) {
+      return {
+        tone: 'muted',
+        text: 'Still writing — Esc to step away',
+        hint: "Press Esc and Peekaboo keeps working in the background. You'll get a desktop notification when the answer is ready, and it'll be waiting in history.",
+      };
+    }
 
     if (activeProvider === 'llama') {
       if (serverStatus === 'starting') return { tone: 'warn', text: 'Starting llama.cpp server…' };
@@ -607,7 +631,7 @@ export const PeekSurface: React.FC = () => {
       return { tone: 'warn', text: 'No model selected', onClick: pickModel };
     }
     return null;
-  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name]);
+  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name, isStreaming, longWait]);
 
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();

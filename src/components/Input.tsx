@@ -318,114 +318,69 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
 
       {/* Shared Command Menu UI */}
       {slashState.active && (
-        <div className="peek-slash-menu">
-          <div className="peek-slash-label">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="16" y1="4" x2="8" y2="20" />
-            </svg>
-            {slashState.phase === 1
-              ? 'Commands'
-              : slashState.manifests.find((m) => m.plugin.id === slashState.pluginId)?.plugin.name ?? 'Results'}
-          </div>
-
-          <div className="peek-slash-scroll" role="listbox">
-            {slashState.phase === 1 &&
-              (slashState.manifests.length === 0 ? (
-                <div className="peek-slash-empty">
-                  {registry.getContextPlugins().length === 0 ? (
-                    <>
-                      <strong>No commands available</strong>
-                      <span>
-                        Commands come from context plugins in
-                        {' '}<code>~/.config/peekaboo/plugins/</code>. You have none installed yet.
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <strong>No matching command</strong>
-                      <span>Backspace to see everything available.</span>
-                    </>
+        <div className="peek-slash-menu" role="listbox">
+          {slashState.phase === 1 &&
+            (slashState.manifests.length === 0 ? (
+              <div className="peek-slash-empty">
+                {registry.getContextPlugins().length === 0
+                  ? 'No context plugins installed.'
+                  : 'No matching command.'}
+              </div>
+            ) : (
+              slashState.manifests.map((m, idx) => (
+                <button
+                  key={m.plugin.id}
+                  type="button"
+                  role="option"
+                  aria-selected={idx === slashState.selectedIndex}
+                  className="peek-slash-item"
+                  onMouseEnter={() => setSlashState((s) => ({ ...s, selectedIndex: idx }))}
+                  onClick={() => enterPhase2(m)}
+                >
+                  <span className="peek-slash-item-title">/{m.context?.command}</span>
+                  {m.plugin.name && (
+                    <span className="peek-slash-item-subtitle">{m.plugin.name}</span>
                   )}
-                </div>
-              ) : (
-                slashState.manifests.map((m, idx) => (
+                </button>
+              ))
+            ))}
+
+          {slashState.phase === 2 &&
+            (slashState.menuItems.length === 0 ? (
+              <div className="peek-slash-empty">
+                {slashState.pluginQuery ? 'Nothing found.' : 'Type to search.'}
+              </div>
+            ) : (
+              slashState.menuItems.map((item, idx) => {
+                if (item.kind === 'group') {
+                  return (
+                    <div key={item.id} className="peek-slash-group">
+                      {item.title}
+                    </div>
+                  );
+                }
+                return (
                   <button
-                    key={m.plugin.id}
+                    key={item.id}
                     type="button"
                     role="option"
                     aria-selected={idx === slashState.selectedIndex}
                     className="peek-slash-item"
                     onMouseEnter={() => setSlashState((s) => ({ ...s, selectedIndex: idx }))}
-                    onClick={() => enterPhase2(m)}
+                    onClick={() => {
+                      if (slashState.pluginId) {
+                        resolveAndAttach(slashState.pluginId, item);
+                      }
+                    }}
                   >
-                    <span className="peek-slash-glyph" aria-hidden="true">
-                      {(m.context?.command ?? '?').charAt(0)}
-                    </span>
-                    <span className="peek-slash-text">
-                      <span className="peek-slash-item-title">/{m.context?.command}</span>
-                      {m.plugin.name && (
-                        <span className="peek-slash-item-subtitle">{m.plugin.name}</span>
-                      )}
-                    </span>
-                    <kbd className="peek-kbd peek-slash-enter">↵</kbd>
+                    <span className="peek-slash-item-title">{item.title}</span>
+                    {item.subtitle && (
+                      <span className="peek-slash-item-subtitle">{item.subtitle}</span>
+                    )}
                   </button>
-                ))
-              ))}
-
-            {slashState.phase === 2 &&
-              (slashState.menuItems.length === 0 ? (
-                <div className="peek-slash-empty">
-                  <strong>{slashState.pluginQuery ? 'Nothing found' : 'No results'}</strong>
-                  <span>
-                    {slashState.pluginQuery
-                      ? 'Try a shorter search term.'
-                      : 'Start typing to search this plugin.'}
-                  </span>
-                </div>
-              ) : (
-                slashState.menuItems.map((item, idx) => {
-                  if (item.kind === 'group') {
-                    return (
-                      <div key={item.id} className="peek-slash-group">
-                        {item.title}
-                      </div>
-                    );
-                  }
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="option"
-                      aria-selected={idx === slashState.selectedIndex}
-                      className="peek-slash-item"
-                      onMouseEnter={() => setSlashState((s) => ({ ...s, selectedIndex: idx }))}
-                      onClick={() => {
-                        if (slashState.pluginId) {
-                          resolveAndAttach(slashState.pluginId, item);
-                        }
-                      }}
-                    >
-                      <span className="peek-slash-glyph" aria-hidden="true">
-                        {item.icon ?? item.title.charAt(0)}
-                      </span>
-                      <span className="peek-slash-text">
-                        <span className="peek-slash-item-title">{item.title}</span>
-                        {item.subtitle && (
-                          <span className="peek-slash-item-subtitle">{item.subtitle}</span>
-                        )}
-                      </span>
-                      <kbd className="peek-kbd peek-slash-enter">↵</kbd>
-                    </button>
-                  );
-                })
-              ))}
-          </div>
-
-          <div className="peek-slash-foot">
-            <span><b>↑↓</b> navigate</span>
-            <span><b>↵</b> select</span>
-            <span><b>esc</b> dismiss</span>
-          </div>
+                );
+              })
+            ))}
         </div>
       )}
     </div>

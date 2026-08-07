@@ -18,6 +18,8 @@ import { togglePanel, useOpenPanel } from '../hooks/usePanels';
 export interface FooterStatus {
   tone: 'ok' | 'warn' | 'error' | 'muted';
   text: string;
+  /** Fuller explanation for the tooltip; the slot is too narrow for long text. */
+  hint?: string;
   /** Makes the status clickable — used to route a config problem somewhere useful. */
   onClick?: () => void;
 }
@@ -150,7 +152,7 @@ export const Footer: React.FC<FooterProps> = ({
               className={`peek-footer-statustext peek-tone-${status.tone}`}
               onClick={status.onClick}
               disabled={!status.onClick}
-              title={status.text}
+              title={status.hint ?? status.text}
             >
               <span className="peek-status-dot" />
               {status.text}
