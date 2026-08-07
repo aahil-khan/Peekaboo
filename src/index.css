@@ -64,10 +64,10 @@
 /* Indigo doubles as the :root default so the palette resolves even if the
    pre-paint script never ran. Later blocks win by source order. */
 :root,
-[data-accent='indigo']  { --peek-accent-d: 129, 140, 248; --peek-accent-l:  79,  70, 229; }
+[data-accent='indigo'] { --peek-accent-d: 129, 140, 248; --peek-accent-l:  79,  70, 229; }
 [data-accent='emerald'] { --peek-accent-d:  52, 211, 153; --peek-accent-l:   5, 150, 105; }
-[data-accent='amber']   { --peek-accent-d: 251, 191,  36; --peek-accent-l: 180,  83,   9; }
-[data-accent='rose']    { --peek-accent-d: 251, 113, 133; --peek-accent-l: 225,  29,  72; }
+[data-accent='amber'] { --peek-accent-d: 251, 191,  36; --peek-accent-l: 180,  83,   9; }
+[data-accent='rose'] { --peek-accent-d: 251, 113, 133; --peek-accent-l: 225,  29,  72; }
 
 /* ═══ Dark theme ════════════════════════════════════════════════════════ */
 
@@ -347,7 +347,6 @@ html[data-window='peek'] {
 .peek-ghost-btn,
 .peek-copy-response-btn,
 .peek-code-copy-btn,
-.peek-nav-btn,
 .peek-history-action-btn {
   display: inline-flex;
   align-items: center;
@@ -367,7 +366,6 @@ html[data-window='peek'] {
 .peek-ghost-btn:hover:not(:disabled),
 .peek-copy-response-btn:hover:not(:disabled),
 .peek-code-copy-btn:hover:not(:disabled),
-.peek-nav-btn:hover:not(:disabled),
 .peek-history-action-btn:hover:not(:disabled) {
   color: var(--peek-text);
   border-color: var(--peek-border-focus);
@@ -377,7 +375,6 @@ html[data-window='peek'] {
 .peek-ghost-btn:focus-visible,
 .peek-copy-response-btn:focus-visible,
 .peek-code-copy-btn:focus-visible,
-.peek-nav-btn:focus-visible,
 .peek-history-action-btn:focus-visible {
   outline: none;
   border-color: var(--peek-accent);
@@ -385,19 +382,12 @@ html[data-window='peek'] {
 }
 
 .peek-ghost-btn:disabled,
-.peek-nav-btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
-
 /*
  * Shared thin-scrollbar treatment. Applied by selector group for the same
  * reason as the buttons above — these elements each carry one class.
  */
 .peek-scroll,
 .peek-transcript,
-.peek-exchange-card,
-.peek-exchange-assistant,
 .peek-table-wrapper,
 .peek-code-block,
 .peek-history-list {
@@ -407,24 +397,18 @@ html[data-window='peek'] {
 
 .peek-scroll::-webkit-scrollbar,
 .peek-transcript::-webkit-scrollbar,
-.peek-exchange-card::-webkit-scrollbar,
-.peek-exchange-assistant::-webkit-scrollbar,
 .peek-table-wrapper::-webkit-scrollbar,
 .peek-code-block::-webkit-scrollbar,
 .peek-history-list::-webkit-scrollbar { width: 4px; height: 4px; }
 
 .peek-scroll::-webkit-scrollbar-track,
 .peek-transcript::-webkit-scrollbar-track,
-.peek-exchange-card::-webkit-scrollbar-track,
-.peek-exchange-assistant::-webkit-scrollbar-track,
 .peek-table-wrapper::-webkit-scrollbar-track,
 .peek-code-block::-webkit-scrollbar-track,
 .peek-history-list::-webkit-scrollbar-track { background: transparent; }
 
 .peek-scroll::-webkit-scrollbar-thumb,
 .peek-transcript::-webkit-scrollbar-thumb,
-.peek-exchange-card::-webkit-scrollbar-thumb,
-.peek-exchange-assistant::-webkit-scrollbar-thumb,
 .peek-table-wrapper::-webkit-scrollbar-thumb,
 .peek-code-block::-webkit-scrollbar-thumb,
 .peek-history-list::-webkit-scrollbar-thumb {
@@ -434,8 +418,6 @@ html[data-window='peek'] {
 
 .peek-scroll::-webkit-scrollbar-thumb:hover,
 .peek-transcript::-webkit-scrollbar-thumb:hover,
-.peek-exchange-card::-webkit-scrollbar-thumb:hover,
-.peek-exchange-assistant::-webkit-scrollbar-thumb:hover,
 .peek-table-wrapper::-webkit-scrollbar-thumb:hover,
 .peek-code-block::-webkit-scrollbar-thumb:hover,
 .peek-history-list::-webkit-scrollbar-thumb:hover {
@@ -1013,82 +995,6 @@ html[data-window='peek'] {
   background: var(--peek-error-soft);
 }
 
-/* ═══ Exchange View (paged — superseded by the transcript) ══════════════ */
-
-.peek-exchange-view {
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
-  position: relative;
-}
-
-.peek-exchange-card {
-  padding: var(--peek-space-3) var(--peek-space-4) var(--peek-space-1);
-  display: flex;
-  flex-direction: column;
-  gap: var(--peek-space-2);
-  max-height: 380px;
-  max-width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.peek-exchange-user {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.peek-exchange-user-bubble {
-  background: var(--peek-accent-soft);
-  border: 1px solid var(--peek-accent-line);
-  color: var(--peek-text-secondary);
-  font-size: var(--peek-text-base);
-  line-height: var(--peek-leading);
-  padding: 6px var(--peek-space-3);
-  border-radius: var(--peek-radius-lg) var(--peek-radius-lg) var(--peek-radius-xs) var(--peek-radius-lg);
-  max-width: 100%;
-  word-break: break-word;
-  user-select: text;
-  font-style: italic;
-  white-space: pre-wrap;
-}
-
-.peek-exchange-assistant {
-  font-size: var(--peek-text-base);
-  line-height: var(--peek-leading-relaxed);
-  color: var(--peek-text);
-  user-select: text;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-wrap: break-word;
-}
-
-.peek-exchange-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--peek-space-2);
-  padding: 6px var(--peek-space-4) var(--peek-space-2);
-  border-top: 1px solid var(--peek-border);
-}
-
-.peek-nav-btn {
-  width: 24px;
-  height: 24px;
-  border-color: var(--peek-border);
-}
-
-.peek-exchange-counter {
-  font-size: var(--peek-text-xs);
-  color: var(--peek-text-muted);
-  font-variant-numeric: tabular-nums;
-  min-width: 36px;
-  text-align: center;
-  letter-spacing: 0.03em;
-}
-
 /* ═══ Transcript ════════════════════════════════════════════════════════ */
 
 /*
@@ -1267,53 +1173,44 @@ html[data-window='peek'] {
 
 /* ═══ Markdown ══════════════════════════════════════════════════════════
  *
- * `.peek-md` is the canonical set. `.peek-exchange-assistant` is listed
- * alongside it only while the paged view still exists; drop that half of each
- * selector when ExchangeView.tsx goes away.
+ * Rendered assistant content. Applied via `.peek-md` on the answer container,
+ * so the same rules cover the transcript and anything else that renders
+ * markdown later.
  */
 
-.peek-md p,
-.peek-exchange-assistant p { margin-bottom: 0.75em; }
+.peek-md p { margin-bottom: 0.75em; }
 
-.peek-md p:last-child,
-.peek-exchange-assistant p:last-child { margin-bottom: 0; }
+.peek-md p:last-child { margin-bottom: 0; }
 
-.peek-md h1, .peek-md h2, .peek-md h3,
-.peek-exchange-assistant h1, .peek-exchange-assistant h2, .peek-exchange-assistant h3 {
+.peek-md h1, .peek-md h2, .peek-md h3 {
   font-weight: 600;
   margin: 1em 0 0.5em;
   color: var(--peek-text);
 }
 
-.peek-md h1, .peek-exchange-assistant h1 { font-size: 1.25em; }
-.peek-md h2, .peek-exchange-assistant h2 { font-size: 1.1em; }
-.peek-md h3, .peek-exchange-assistant h3 { font-size: 1em; }
+.peek-md h1 { font-size: 1.25em; }
+.peek-md h2 { font-size: 1.1em; }
+.peek-md h3 { font-size: 1em; }
 
-.peek-md strong,
-.peek-exchange-assistant strong { font-weight: 600; color: var(--peek-text); }
+.peek-md strong { font-weight: 600; color: var(--peek-text); }
 
-.peek-md em,
-.peek-exchange-assistant em { font-style: italic; color: var(--peek-text-secondary); }
+.peek-md em { font-style: italic; color: var(--peek-text-secondary); }
 
-.peek-md ul, .peek-md ol,
-.peek-exchange-assistant ul, .peek-exchange-assistant ol {
+.peek-md ul, .peek-md ol {
   padding-left: 1.5em;
   margin-bottom: 0.75em;
 }
 
-.peek-md li,
-.peek-exchange-assistant li { margin-bottom: 0.3em; }
+.peek-md li { margin-bottom: 0.3em; }
 
-.peek-md blockquote,
-.peek-exchange-assistant blockquote {
+.peek-md blockquote {
   border-left: 2px solid var(--peek-accent-dim);
   padding-left: var(--peek-space-3);
   color: var(--peek-text-secondary);
   margin: 0.75em 0;
 }
 
-.peek-md table,
-.peek-exchange-assistant table {
+.peek-md table {
   width: 100%;
   border-collapse: collapse;
   margin: 0;
@@ -1321,15 +1218,13 @@ html[data-window='peek'] {
   table-layout: auto;
 }
 
-.peek-md th, .peek-md td,
-.peek-exchange-assistant th, .peek-exchange-assistant td {
+.peek-md th, .peek-md td {
   padding: 6px var(--peek-space-2);
   border: 1px solid var(--peek-border);
   text-align: left;
 }
 
-.peek-md th,
-.peek-exchange-assistant th {
+.peek-md th {
   background: var(--peek-badge-bg);
   font-weight: 600;
 }

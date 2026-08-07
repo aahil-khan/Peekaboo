@@ -5,7 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 import { Input } from './Input';
-import { ExchangeView } from './ExchangeView';
+import { Transcript } from './Transcript';
 import { History } from './History';
 import { Models } from './Models';
 import { Legend } from './Legend';
@@ -16,7 +16,7 @@ import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
 import { useShortcuts } from '../hooks/useShortcuts';
-import { useAttachments } from '../hooks/useAttachments';
+import { useAttachments, type Attachment } from '../hooks/useAttachments';
 import { registry } from '../lib/plugins/registry';
 import { usePluginsStore } from '../store/plugins';
 import { useLlamaServer } from '../hooks/useLlamaServer';
@@ -517,8 +517,9 @@ export const PeekSurface: React.FC = () => {
 
   const hasConversation = isStreaming || messages.some((m) => m.role !== 'system');
 
-  const handleExchangeChange = useCallback((_current: number, _total: number) => {
-    // No-op
+  const handleViewAttachment = useCallback((att: Attachment) => {
+    setViewingAttachment(att);
+    setHasActiveModalHeight(true);
   }, []);
 
   const { isModelsOpen } = useSettingsStore();
@@ -663,19 +664,16 @@ export const PeekSurface: React.FC = () => {
                 </div>
               </div>
 
-              {/* Paged exchange view */}
+              {/* Conversation transcript. Keyed on the session so switching
+                  history entries remounts cleanly at the bottom. */}
               <AnimatePresence>
                 {hasConversation && (
-                  <ExchangeView
-                    key={`peek-exchange-view-${activeSessionId || 'new'}`}
+                  <Transcript
+                    key={`peek-transcript-${activeSessionId || 'new'}`}
                     messages={messages}
                     streamingContent={streamingContent}
                     isStreaming={isStreaming}
-                    onExchangeChange={handleExchangeChange}
-                    onClickAttachment={(att) => {
-                      setViewingAttachment(att);
-                      setHasActiveModalHeight(true);
-                    }}
+                    onClickAttachment={handleViewAttachment}
                   />
                 )}
               </AnimatePresence>
