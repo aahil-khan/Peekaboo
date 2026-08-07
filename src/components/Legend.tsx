@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePeekStore } from '../store/peek';
-import { historyVariants } from '../lib/motion';
+import { historyVariants, panelRowVariants } from '../lib/motion';
 
 /**
  * Grouped rather than listed flat: seventeen undifferentiated rows is a wall,
@@ -47,6 +47,8 @@ const HOTKEY_GROUPS: { title: string; keys: { key: string; description: string }
   },
 ];
 
+const TOTAL_SHORTCUTS = HOTKEY_GROUPS.reduce((n, g) => n + g.keys.length, 0);
+
 export const Legend: React.FC = () => {
   const { isLegendOpen, setLegendOpen } = usePeekStore();
 
@@ -74,8 +76,17 @@ export const Legend: React.FC = () => {
           exit="exit"
           style={{ zIndex: 100 }} // Ensure it overlaps other panels if they are somehow open
         >
-          <div className="peek-history-header">
-            <span className="peek-history-title">Keyboard Shortcuts</span>
+          <motion.div className="peek-history-header" variants={panelRowVariants}>
+            <span className="peek-panel-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+              </svg>
+            </span>
+            <span className="peek-history-title">Shortcuts</span>
+            <span className="peek-panel-count">{TOTAL_SHORTCUTS}</span>
+            <span className="peek-panel-spacer" />
+            <span className="peek-panel-esc">esc</span>
             <button
               className="peek-panel-close"
               onClick={() => setLegendOpen(false)}
@@ -86,10 +97,10 @@ export const Legend: React.FC = () => {
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-          </div>
+          </motion.div>
           <div className="peek-history-list">
             {HOTKEY_GROUPS.map((group) => (
-              <React.Fragment key={group.title}>
+              <motion.div key={group.title} variants={panelRowVariants}>
                 <div className="peek-legend-group">{group.title}</div>
                 {group.keys.map((hk) => (
                   <div key={hk.key} className="peek-legend-row">
@@ -97,7 +108,7 @@ export const Legend: React.FC = () => {
                     <kbd className="peek-kbd">{hk.key}</kbd>
                   </div>
                 ))}
-              </React.Fragment>
+              </motion.div>
             ))}
           </div>
         </motion.div>

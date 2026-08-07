@@ -17,19 +17,44 @@
       (function () {
         var el = document.documentElement;
 
+        /* Only the light/dark counterparts need to be known this early; the
+           full registry lives in src/lib/themes.ts. Keep these pairs in sync
+           with the `pairedWith` fields there. */
+        var PAIRS = {
+          'peek-dark': ['dark', 'peek-light'],
+          'peek-light': ['light', 'peek-dark'],
+          'catppuccin-mocha': ['dark', 'catppuccin-latte'],
+          'catppuccin-macchiato': ['dark', 'catppuccin-latte'],
+          'catppuccin-latte': ['light', 'catppuccin-mocha'],
+          'tokyo-night': ['dark', 'tokyo-night-day'],
+          'tokyo-night-day': ['light', 'tokyo-night'],
+          'nord': ['dark', 'peek-light'],
+          'gruvbox-dark': ['dark', 'gruvbox-light'],
+          'gruvbox-light': ['light', 'gruvbox-dark'],
+          'rose-pine': ['dark', 'rose-pine-dawn'],
+          'rose-pine-dawn': ['light', 'rose-pine'],
+          'solarized-dark': ['dark', 'solarized-light'],
+          'solarized-light': ['light', 'solarized-dark']
+        };
+
         try {
           var persisted = JSON.parse(localStorage.getItem('peekaboo-settings') || '{}').state || {};
-          var mode = persisted.themeMode || 'dark';
-          el.dataset.theme =
-            mode === 'system'
-              ? matchMedia('(prefers-color-scheme: dark)').matches
-                ? 'dark'
-                : 'light'
-              : mode;
-          el.dataset.accent = persisted.themeAccent || 'indigo';
+          var id = persisted.themeId || 'peek-dark';
+          if (!PAIRS[id]) id = 'peek-dark';
+
+          if (persisted.followSystem) {
+            var want = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            if (PAIRS[id][0] !== want) id = PAIRS[id][1];
+          }
+
+          el.dataset.theme = id;
+          el.dataset.appearance = PAIRS[id][0];
+          if (persisted.themeAccent && persisted.themeAccent !== 'auto') {
+            el.dataset.accent = persisted.themeAccent;
+          }
         } catch (e) {
-          el.dataset.theme = 'dark';
-          el.dataset.accent = 'indigo';
+          el.dataset.theme = 'peek-dark';
+          el.dataset.appearance = 'dark';
         }
 
         /* Same field @tauri-apps/api reads, just read early enough to matter. */
@@ -55,8 +80,8 @@
         background: #18181b;
         color: #fafafa;
       }
-      html[data-theme='light'][data-window='settings'],
-      html[data-theme='light'][data-window='setup'] {
+      html[data-appearance='light'][data-window='settings'],
+      html[data-appearance='light'][data-window='setup'] {
         background: #f4f4f5;
         color: #18181b;
       }

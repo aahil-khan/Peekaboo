@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useHistoryStore, type Session } from '../store/history';
 import { usePeekStore } from '../store/peek';
-import { historyVariants } from '../lib/motion';
+import { historyVariants, panelRowVariants } from '../lib/motion';
 import { updateSessionTitle, deleteSession, getRecentSessions } from '../db/database';
 
 interface HistoryProps {
@@ -160,32 +160,28 @@ export const History: React.FC<HistoryProps> = ({ onSelectSession }) => {
           animate="visible"
           exit="exit"
         >
-          <div className="peek-history-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="peek-history-title">Recent</span>
-            </div>
+          <motion.div className="peek-history-header" variants={panelRowVariants}>
+            <span className="peek-panel-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15 14" />
+              </svg>
+            </span>
+            <span className="peek-history-title">Recent</span>
+            {sessions.length > 0 && <span className="peek-panel-count">{filteredSessions.length}</span>}
+            <span className="peek-panel-spacer" />
+            <span className="peek-panel-esc">type to search · esc</span>
             <button
+              className="peek-panel-close"
               onClick={() => setOpen(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--peek-text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-                borderRadius: 4,
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = 'var(--peek-text)')}
-              onMouseOut={(e) => (e.currentTarget.style.color = 'var(--peek-text-muted)')}
+              aria-label="Close history"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-          </div>
+          </motion.div>
           
           <AnimatePresence>
             {isSearchVisible && sessions.length > 0 && (
@@ -222,16 +218,33 @@ export const History: React.FC<HistoryProps> = ({ onSelectSession }) => {
 
           <div className="peek-history-list" ref={scrollContainerRef}>
             {filteredSessions.length === 0 ? (
-              <div className="peek-history-empty">
-                {searchQuery ? 'No matching conversations' : 'No conversations yet'}
+              <div className="peek-empty">
+                <span className="peek-empty-icon" aria-hidden="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="9" />
+                    <polyline points="12 7 12 12 15 14" />
+                  </svg>
+                </span>
+                <span className="peek-empty-title">
+                  {searchQuery ? 'Nothing matches that' : 'No conversations yet'}
+                </span>
+                <span className="peek-empty-hint">
+                  {searchQuery
+                    ? 'Try a shorter search, or clear it to see everything.'
+                    : 'Every conversation you have is saved here automatically, so you can pick one back up later.'}
+                </span>
               </div>
             ) : (
               filteredSessions.map((session, idx) => (
                 <button
                   key={session.id}
                   className="peek-history-item"
+                  data-active={session.id === activeSessionId ? 'true' : undefined}
                   style={{
-                    background: idx === selectedIndex && editingId !== session.id ? 'var(--peek-hover)' : 'transparent',
+                    background:
+                      idx === selectedIndex && editingId !== session.id && session.id !== activeSessionId
+                        ? 'var(--peek-hover)'
+                        : undefined,
                   }}
                   onClick={() => {
                     if (editingId !== session.id) {

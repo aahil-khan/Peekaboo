@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { DEFAULT_THEME_ID, type ThemeAccent } from '../lib/themes';
 
 export interface LlamaProfile {
   id: string;
@@ -31,13 +32,6 @@ export const DEFAULT_LLAMA_PROFILE: Omit<LlamaProfile, 'id' | 'name' | 'binaryPa
   temperature: 0.8,
 };
 
-/** Follows the OS, or pins light/dark regardless of it. */
-export type ThemeMode = 'system' | 'light' | 'dark';
-
-/** Hue presets. Values must match the [data-accent] blocks in index.css. */
-export const THEME_ACCENTS = ['indigo', 'emerald', 'amber', 'rose'] as const;
-export type ThemeAccent = (typeof THEME_ACCENTS)[number];
-
 interface SettingsState {
   setupCompleted: boolean;
   activeProvider: string;
@@ -50,7 +44,11 @@ interface SettingsState {
   isModelsOpen: boolean;
   systemPrompt: string;
   autoCopyOnHide: boolean;
-  themeMode: ThemeMode;
+  /** Palette id from src/lib/themes.ts. */
+  themeId: string;
+  /** Swap to the palette's light/dark counterpart to match the OS. */
+  followSystem: boolean;
+  /** 'auto' keeps the palette's own accent. */
   themeAccent: ThemeAccent;
   /** Whether the first-run orientation strip in the overlay has been dismissed. */
   overlayTourSeen: boolean;
@@ -61,7 +59,8 @@ interface SettingsState {
 
   setSetupCompleted: (v: boolean) => void;
   setHistoryRetentionDays: (v: number) => void;
-  setThemeMode: (v: ThemeMode) => void;
+  setThemeId: (v: string) => void;
+  setFollowSystem: (v: boolean) => void;
   setThemeAccent: (v: ThemeAccent) => void;
   setOverlayTourSeen: (v: boolean) => void;
   setActiveProvider: (v: string) => void;
@@ -97,10 +96,11 @@ export const useSettingsStore = create<SettingsState>()(
       // Off by default on purpose: copying on every dismiss would silently
       // destroy whatever the user already had on their clipboard.
       autoCopyOnHide: false,
-      // Dark, not 'system': the dark palette is the app's designed default and
-      // what an existing install already looks like. Following the OS is opt-in.
-      themeMode: 'dark',
-      themeAccent: 'indigo',
+      // The designed default, and what an existing install already looks like.
+      // Following the OS is opt-in.
+      themeId: DEFAULT_THEME_ID,
+      followSystem: false,
+      themeAccent: 'auto',
       overlayTourSeen: false,
       openaiApiKey: '',
       openaiBaseUrl: 'https://api.openai.com/v1',
@@ -109,7 +109,8 @@ export const useSettingsStore = create<SettingsState>()(
 
       setSetupCompleted: (v) => set({ setupCompleted: v }),
       setHistoryRetentionDays: (v) => set({ historyRetentionDays: v }),
-      setThemeMode: (v) => set({ themeMode: v }),
+      setThemeId: (v) => set({ themeId: v }),
+      setFollowSystem: (v) => set({ followSystem: v }),
       setThemeAccent: (v) => set({ themeAccent: v }),
       setOverlayTourSeen: (v) => set({ overlayTourSeen: v }),
       setActiveProvider: (v) => set({ activeProvider: v }),

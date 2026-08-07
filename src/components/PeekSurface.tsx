@@ -678,19 +678,6 @@ export const PeekSurface: React.FC = () => {
                   />
                 )}
               </AnimatePresence>
-
-              {/* Persistent action bar. Absorbed the old status bar, which
-                  rendered nothing at all during the provider check or when no
-                  model was picked — a blank band on the cold-start path. */}
-              <Footer
-                onNewChat={handleClear}
-                onCaptureRegion={handleCaptureRegion}
-                captureDisabledReason={isVisionModel ? null : 'Screen capture needs a vision model'}
-                onOpenSettings={() => invoke('open_settings')}
-                status={footerStatus}
-                toast={toast}
-                modelLabel={activeModel || null}
-              />
             </div>
 
             {/* History Panel */}
@@ -815,6 +802,23 @@ export const PeekSurface: React.FC = () => {
               )}
             </AnimatePresence>
           </div>
+
+          {/*
+            Outside the overlay grid on purpose. The panels are absolutely
+            positioned within that grid, so anything inside it gets covered;
+            keeping the bar here means it is always visible, always clickable,
+            and genuinely pinned to the bottom edge of the surface rather than
+            floating wherever the content above happens to end.
+          */}
+          <Footer
+            onNewChat={handleClear}
+            onCaptureRegion={handleCaptureRegion}
+            captureDisabledReason={isVisionModel ? null : 'Screen capture needs a vision model'}
+            onOpenSettings={() => invoke('open_settings')}
+            status={footerStatus}
+            toast={toast}
+            modelLabel={activeModel || null}
+          />
         </motion.div>
       )}
     </AnimatePresence>

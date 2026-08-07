@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePeekStore } from '../store/peek';
-import { historyVariants } from '../lib/motion';
+import { historyVariants, panelRowVariants } from '../lib/motion';
 import { saveMemory, deleteMemory, updateMemory, togglePinMemory, incrementMemoryUsage } from '../db/database';
 
 function generateId(): string {
@@ -255,32 +255,27 @@ export const MemoryOverlay: React.FC = () => {
           exit="exit"
           style={{ zIndex: 105, position: 'absolute' }}
         >
-          <div className="peek-history-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="peek-history-title">{title}</span>
-            </div>
+          <motion.div className="peek-history-header" variants={panelRowVariants}>
+            <span className="peek-panel-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+            </span>
+            <span className="peek-history-title">{title}</span>
+            {items.length > 0 && <span className="peek-panel-count">{items.length}</span>}
+            <span className="peek-panel-spacer" />
+            <span className="peek-panel-esc">esc</span>
             <button
+              className="peek-panel-close"
               onClick={() => setMemoryOverlay({ isOpen: false, initialSearchQuery: undefined })}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--peek-text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-                borderRadius: 4,
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = 'var(--peek-text)')}
-              onMouseOut={(e) => (e.currentTarget.style.color = 'var(--peek-text-muted)')}
+              aria-label="Close memories"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-          </div>
+          </motion.div>
           
           <AnimatePresence>
             {isSearchVisible && (
@@ -329,8 +324,17 @@ export const MemoryOverlay: React.FC = () => {
 
           <div className="peek-history-list" ref={scrollContainerRef} style={{ position: 'relative' }}>
             {displayItems.length === 0 ? (
-              <div className="peek-history-empty" style={{ paddingTop: 16 }}>
-                Nothing found
+              <div className="peek-empty">
+                <span className="peek-empty-icon" aria-hidden="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                  </svg>
+                </span>
+                <span className="peek-empty-title">No memories yet</span>
+                <span className="peek-empty-hint">
+                  Hit “Remember” under any answer, or select some text and press Alt+R, to keep it
+                  here for later.
+                </span>
               </div>
             ) : (
               displayItems.map((item, idx) => (

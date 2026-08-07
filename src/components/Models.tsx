@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSettingsStore } from '../store/settings';
-import { historyVariants } from '../lib/motion';
+import { historyVariants, panelRowVariants } from '../lib/motion';
 import { OllamaProvider } from '../providers/ollama';
 import { LlamaProvider } from '../providers/llama';
 import { OpenAIProvider } from '../providers/openai';
@@ -118,32 +118,28 @@ export const Models: React.FC = () => {
           animate="visible"
           exit="exit"
         >
-          <div className="peek-history-header">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span className="peek-history-title">Models</span>
-            </div>
+          <motion.div className="peek-history-header" variants={panelRowVariants}>
+            <span className="peek-panel-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z" />
+                <path d="M12 20v-9M4 6.5l8 4.5 8-4.5" />
+              </svg>
+            </span>
+            <span className="peek-history-title">Models</span>
+            {availableModels.length > 0 && <span className="peek-panel-count">{filteredModels.length}</span>}
+            <span className="peek-panel-spacer" />
+            <span className="peek-panel-esc">type to search · esc</span>
             <button
+              className="peek-panel-close"
               onClick={() => setModelsOpen(false)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: 'var(--peek-text-muted)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-                borderRadius: 4,
-              }}
-              onMouseOver={(e) => (e.currentTarget.style.color = 'var(--peek-text)')}
-              onMouseOut={(e) => (e.currentTarget.style.color = 'var(--peek-text-muted)')}
+              aria-label="Close models"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-          </div>
+          </motion.div>
 
           <AnimatePresence>
             {isSearchVisible && availableModels.length > 0 && (
@@ -177,8 +173,23 @@ export const Models: React.FC = () => {
 
           <div className="peek-history-list" ref={scrollContainerRef}>
             {filteredModels.length === 0 ? (
-              <div className="peek-history-empty">
-                {searchQuery ? 'No matching models' : 'No models available'}
+              <div className="peek-empty">
+                <span className="peek-empty-icon" aria-hidden="true">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2l8 4.5v9L12 20l-8-4.5v-9z" />
+                    <path d="M12 20v-9M4 6.5l8 4.5 8-4.5" />
+                  </svg>
+                </span>
+                <span className="peek-empty-title">
+                  {searchQuery ? 'Nothing matches that' : 'No models available'}
+                </span>
+                <span className="peek-empty-hint">
+                  {searchQuery
+                    ? 'Try a shorter search.'
+                    : activeProvider === 'ollama'
+                      ? 'Ollama is reachable but has no models pulled yet. Run “ollama pull llama3.2” in a terminal, then reopen this.'
+                      : 'This provider reported no models. Check its configuration in Settings.'}
+                </span>
               </div>
             ) : (
               filteredModels.map((model, idx) => (

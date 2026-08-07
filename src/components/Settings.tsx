@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import {
-  useSettingsStore,
-  LlamaProfile,
-  THEME_ACCENTS,
-  type ThemeMode,
-} from '../store/settings';
+import { useSettingsStore, LlamaProfile } from '../store/settings';
+import { THEME_ACCENTS, findTheme, themesByFamily } from '../lib/themes';
 import { LlamaProfileEditor } from './LlamaProfileEditor';
 import { ProviderFields } from './ProviderFields';
 import { useLlamaServer } from '../hooks/useLlamaServer';
@@ -42,7 +38,8 @@ export const Settings: React.FC = () => {
     historyRetentionDays, setHistoryRetentionDays,
     systemPrompt, setSystemPrompt,
     autoCopyOnHide, setAutoCopyOnHide,
-    themeMode, setThemeMode,
+    themeId, setThemeId,
+    followSystem, setFollowSystem,
     themeAccent, setThemeAccent,
   } = useSettingsStore();
 
@@ -119,45 +116,94 @@ export const Settings: React.FC = () => {
             <p className="peek-settings-intro">How Peekaboo looks and behaves when you summon it.</p>
 
             <div className="peek-settings-card">
+              <span className="peek-settings-rowtext">
+                <span className="peek-settings-label">Theme</span>
+                <span className="peek-settings-desc">
+                  Each one is a complete palette. Cards preview their own colours.
+                </span>
+              </span>
+
+              {themesByFamily().map(({ family, themes }) => (
+                <div key={family}>
+                  <div className="peek-theme-family">{family}</div>
+                  <div className="peek-theme-grid">
+                    {themes.map((t) => (
+                      <button
+                        key={t.id}
+                        className="peek-theme-card"
+                        data-theme={t.id}
+                        data-appearance={t.appearance}
+                        aria-pressed={themeId === t.id}
+                        onClick={() => setThemeId(t.id)}
+                      >
+                        <span className="peek-theme-dots"><i /><i /><i /></span>
+                        <span className="peek-theme-name">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              <div className="peek-settings-divider" />
+
               <div className="peek-settings-row">
                 <span className="peek-settings-rowtext">
-                  <span className="peek-settings-label">Theme</span>
+                  <span className="peek-settings-label">Match my system</span>
                   <span className="peek-settings-desc">
-                    “System” follows your desktop's light or dark setting.
+                    Switch to {findTheme(themeId).pairedWith
+                      ? findTheme(findTheme(themeId).pairedWith!).label
+                      : 'the counterpart'}{' '}
+                    when the desktop is set to{' '}
+                    {findTheme(themeId).appearance === 'dark' ? 'light' : 'dark'} mode.
                   </span>
                 </span>
-                <div className="peek-segmented">
-                  {(['light', 'dark', 'system'] as ThemeMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      aria-pressed={themeMode === mode}
-                      onClick={() => setThemeMode(mode)}
-                    >
-                      {mode === 'light' ? 'Light' : mode === 'dark' ? 'Dark' : 'System'}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  className="peek-switch"
+                  role="switch"
+                  aria-checked={followSystem}
+                  aria-label="Match my system light or dark setting"
+                  onClick={() => setFollowSystem(!followSystem)}
+                />
               </div>
 
               <div className="peek-settings-divider" />
 
               <div className="peek-settings-row">
                 <span className="peek-settings-rowtext">
-                  <span className="peek-settings-label">Accent colour</span>
-                  <span className="peek-settings-desc">Used for highlights, links and the cursor.</span>
+                  <span className="peek-settings-label">Accent</span>
+                  <span className="peek-settings-desc">
+                    Overrides the palette's own highlight colour. “Auto” keeps it.
+                  </span>
                 </span>
                 <div className="peek-swatches">
-                  {THEME_ACCENTS.map((accent) => (
-                    <button
-                      key={accent}
-                      className="peek-swatch"
-                      data-accent={accent}
-                      aria-pressed={themeAccent === accent}
-                      aria-label={accent}
-                      title={accent}
-                      onClick={() => setThemeAccent(accent)}
-                    />
-                  ))}
+                  {THEME_ACCENTS.map((accent) =>
+                    accent === 'auto' ? (
+                      <button
+                        key={accent}
+                        className="peek-btn peek-btn--sm"
+                        aria-pressed={themeAccent === 'auto'}
+                        onClick={() => setThemeAccent('auto')}
+                        style={
+                          themeAccent === 'auto'
+                            ? { borderColor: 'var(--peek-accent)', color: 'var(--peek-accent)' }
+                            : undefined
+                        }
+                      >
+                        Auto
+                      </button>
+                    ) : (
+                      <button
+                        key={accent}
+                        className="peek-swatch"
+                        data-accent={accent}
+                        data-appearance={findTheme(themeId).appearance}
+                        aria-pressed={themeAccent === accent}
+                        aria-label={accent}
+                        title={accent}
+                        onClick={() => setThemeAccent(accent)}
+                      />
+                    )
+                  )}
                 </div>
               </div>
             </div>

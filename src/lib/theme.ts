@@ -1,50 +1,68 @@
 /**
- * Keeps the `data-theme` / `data-accent` attributes on <html> in step with the
- * settings store and the OS colour scheme.
+ * Keeps the theme attributes on <html> in step with the settings store and the
+ * OS colour scheme.
  *
- * The store's mode may be 'system', but the DOM only ever sees 'light' or
- * 'dark' — CSS therefore never has to reason about a third value.
+ * Three attributes are stamped:
+ *   data-theme       which palette (see src/lib/themes.ts and index.css)
+ *   data-appearance  light | dark — selects the structural values
+ *   data-accent      only when the user overrode the palette's own accent
  *
- * The equivalent of the first-paint pass lives inline in index.html, which runs
- * before this module is loaded. Keep the two in sync.
+ * The equivalent first-paint pass lives inline in index.html, which runs before
+ * this module loads. Keep the two in sync.
  */
 
-import { useSettingsStore, type ThemeMode, type ThemeAccent } from '../store/settings';
+import { useSettingsStore } from '../store/settings';
+import { findTheme, type ThemeAccent } from './themes';
 
 const darkQuery =
   typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(prefers-color-scheme: dark)')
     : null;
 
-/** Collapse 'system' down to what the OS currently reports. */
-export function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
-  if (mode === 'system') return darkQuery?.matches ? 'dark' : 'light';
-  return mode;
+/**
+ * The palette to actually use.
+ *
+ * When following the system, a theme whose appearance disagrees with the OS is
+ * swapped for its counterpart — Mocha becomes Latte rather than becoming some
+ * unrelated light theme.
+ */
+export function resolveThemeId(themeId: string, followSystem: boolean): string {
+  const theme = findTheme(themeId);
+  if (!followSystem) return theme.id;
+
+  const systemAppearance = darkQuery?.matches ? 'dark' : 'light';
+  if (theme.appearance === systemAppearance) return theme.id;
+  return theme.pairedWith ?? theme.id;
 }
 
-export function applyTheme(mode: ThemeMode, accent: ThemeAccent): void {
+export function applyTheme(themeId: string, followSystem: boolean, accent: ThemeAccent): void {
   const el = document.documentElement;
-  const next = `${resolveTheme(mode)}|${accent}`;
-  // Cheap guard: the store fires on every settings change, not just theme ones,
-  // and every window rehydrates on the storage event.
-  if (el.dataset.themeKey === next) return;
-  el.dataset.themeKey = next;
-  el.dataset.theme = resolveTheme(mode);
-  el.dataset.accent = accent;
+  const resolved = findTheme(resolveThemeId(themeId, followSystem));
+
+  const key = `${resolved.id}|${accent}`;
+  // The store fires on every settings change, not just theme ones, and every
+  // window rehydrates on the storage event.
+  if (el.dataset.themeKey === key) return;
+  el.dataset.themeKey = key;
+
+  el.dataset.theme = resolved.id;
+  el.dataset.appearance = resolved.appearance;
+
+  if (accent === 'auto') delete el.dataset.accent;
+  else el.dataset.accent = accent;
 }
 
 /**
  * Starts syncing. Call once at module scope — not from a component — so React's
  * StrictMode double-mount doesn't subscribe twice.
  *
- * Cross-window propagation comes for free: the store already rehydrates on the
- * `storage` event, rehydrate() calls set() internally, and set() notifies this
- * subscriber.
+ * Cross-window propagation is free: the store already rehydrates on the
+ * `storage` event, rehydrate() calls set(), and set() notifies this subscriber.
  */
 export function initThemeRuntime(): () => void {
   const sync = () => {
-    const { themeMode, themeAccent } = useSettingsStore.getState();
-    applyTheme(themeMode, themeAccent);
+    const { themeId, followSystem, themeAccent } = useSettingsStore.getState();
+    applyTheme(themeId, followSystem, themeAccent);
   };
 
   sync();
