@@ -242,10 +242,14 @@ export const PeekSurface: React.FC = () => {
     if (!query) return;
     
     if (!activeModel) {
-      setToast({ type: 'error', text: 'No model selected — check Settings or wait for server' });
+      setToast({ type: 'error', text: 'No model selected — pick one from the model button' });
       setTimeout(() => setToast(null), 3000);
       return;
     }
+
+    // Asking a question is proof the hint did its job; retire it so it doesn't
+    // reappear on every new chat.
+    useSettingsStore.getState().setOverlayTourSeen(true);
 
     const messageContent = buildMessageContent(query);
     const hasAttachments = attachments.length > 0;
