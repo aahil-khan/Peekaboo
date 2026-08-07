@@ -926,22 +926,65 @@ html[data-window='peek'] {
  * taller and the window follows, which is how every other row here works.
  */
 .peek-slash-menu {
+  display: flex;
+  flex-direction: column;
   flex-shrink: 0;
-  max-height: 220px;
-  overflow-y: auto;
+  max-height: 244px;
   border-bottom: 1px solid var(--peek-border);
-  background: var(--peek-surface-1);
+  background: linear-gradient(
+    to bottom,
+    var(--peek-accent-soft),
+    transparent 44px
+  ),
+  var(--peek-surface-1);
+  animation: peek-slash-in 0.16s ease-out;
+}
+
+@keyframes peek-slash-in {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.peek-slash-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: var(--peek-space-2) var(--peek-space-3) 5px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--peek-accent);
+}
+
+.peek-slash-scroll {
+  overflow-y: auto;
+  padding-bottom: var(--peek-space-1);
 }
 
 .peek-slash-empty {
-  padding: var(--peek-space-2) var(--peek-space-3);
-  color: var(--peek-text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px var(--peek-space-3) var(--peek-space-3);
+}
+
+.peek-slash-empty strong {
   font-size: var(--peek-text-base);
+  font-weight: 500;
+  color: var(--peek-text-secondary);
+}
+
+.peek-slash-empty span {
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+  line-height: var(--peek-leading);
 }
 
 .peek-slash-group {
   padding: var(--peek-space-2) var(--peek-space-3) var(--peek-space-1);
-  font-size: var(--peek-text-xs);
+  font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
   color: var(--peek-text-muted);
@@ -950,33 +993,112 @@ html[data-window='peek'] {
 
 .peek-slash-item {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: var(--peek-space-2);
+  position: relative;
   width: 100%;
-  padding: var(--peek-space-2) var(--peek-space-3);
+  padding: 6px var(--peek-space-3);
   border: none;
   background: transparent;
   text-align: left;
   cursor: pointer;
   color: var(--peek-text);
   font-family: var(--peek-font);
-  font-size: var(--peek-text-md);
+  font-size: var(--peek-text-base);
+  transition: background 0.1s ease;
 }
 
-.peek-slash-item:hover {
-  background: var(--peek-hover);
+.peek-slash-item::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  width: 3px;
+  height: 0;
+  border-radius: 2px;
+  background: var(--peek-accent);
+  transform: translateY(-50%);
+  transition: height 0.14s ease;
+}
+
+.peek-slash-item[aria-selected='true']::before {
+  height: 58%;
 }
 
 .peek-slash-item[aria-selected='true'] {
   background: var(--peek-accent-soft);
 }
 
+/* The glyph chip: the command's own initial, so each entry is distinguishable
+   at a glance rather than being one more line of grey text. */
+.peek-slash-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-accent-soft);
+  color: var(--peek-accent);
+  font-family: var(--peek-font-mono);
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.peek-slash-item[aria-selected='true'] .peek-slash-glyph {
+  background: var(--peek-accent);
+  color: var(--peek-accent-contrast);
+}
+
+.peek-slash-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
 .peek-slash-item-title {
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .peek-slash-item-subtitle {
-  font-size: var(--peek-text-sm);
+  font-size: var(--peek-text-xs);
   color: var(--peek-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Only the focused row advertises Enter, so the list doesn't read as noise. */
+.peek-slash-enter {
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.peek-slash-item[aria-selected='true'] .peek-slash-enter {
+  opacity: 1;
+}
+
+.peek-slash-foot {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-3);
+  flex-shrink: 0;
+  padding: 5px var(--peek-space-3);
+  border-top: 1px solid var(--peek-divider);
+  font-size: 10px;
+  color: var(--peek-text-muted);
+}
+
+.peek-slash-foot b {
+  font-weight: 600;
+  color: var(--peek-text-secondary);
 }
 
 /* ═══ Attachment Chips ══════════════════════════════════════════════════ */

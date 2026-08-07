@@ -17,7 +17,7 @@ import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
 import { useShortcuts } from '../hooks/useShortcuts';
-import { togglePanel } from '../hooks/usePanels';
+import { togglePanel, closePanels } from '../hooks/usePanels';
 import { useAttachments, type Attachment } from '../hooks/useAttachments';
 import { registry } from '../lib/plugins/registry';
 import { usePluginsStore } from '../store/plugins';
@@ -414,6 +414,9 @@ export const PeekSurface: React.FC = () => {
     abortStream();
     clear();
     clearAttachments();
+    // Starting a new chat means wanting to see it. Leaving History or Models
+    // covering the surface makes the button look like it did nothing.
+    closePanels();
 
     if (!hadSomething) return;
     setToast({ type: 'success', text: 'New chat' });
