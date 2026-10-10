@@ -4,7 +4,7 @@
 
 **An AI overlay that actually works on Linux, and isn't locked to one vendor's model.**
 
-Hit `Ctrl+Space` anywhere. Ask. Get an answer. It disappears.
+Hit `Ctrl+Alt+Space` anywhere (`Option+Space` on a Mac, and you can change it in Settings). Ask. Get an answer. It disappears.
 
 Peekaboo is a keyboard-summoned overlay — not a window you alt-tab to, not a browser tab you leave pinned. It appears over whatever you're doing, answers, and gets out of the way.
 
@@ -28,9 +28,9 @@ Peekaboo takes a different shape:
 ## Features
 
 **The overlay**
-- Global `Ctrl+Space` / `Alt+Space` summon, registered natively so there's no startup lag
+- Global summon hotkey, registered natively so there's no startup lag. Default `Ctrl+Alt+Space` (`Option+Space` on macOS); record your own in Settings → General
 - Transparent, always-on-top, auto-sizing surface that grows with the answer
-- Auto-hides on focus loss; tray icon for show/settings/quit
+- Auto-hides on focus loss; tray icon for show/settings/quit, and `Ctrl+Q` in the overlay quits on desktops without a tray
 - Dismiss mid-answer (`Esc`) and it keeps generating in the background, then notifies you
 
 **Models**
@@ -82,7 +82,7 @@ On first run, a setup window walks you through picking a backend.
 
 | Key | Action |
 | --- | --- |
-| `Ctrl+Space` / `Alt+Space` | Summon or hide |
+| `Ctrl+Alt+Space` (macOS: `Option+Space`) | Summon or hide. Configurable in Settings → General |
 | `Enter` | Send |
 | `Shift+Enter` | Line break |
 | `/` | Context plugin commands |
@@ -97,6 +97,11 @@ On first run, a setup window walks you through picking a backend.
 | `Alt+/` | Shortcut legend |
 | `Alt+←` / `Alt+→` | Previous / next exchange |
 | `Esc` | Dismiss |
+| `Ctrl+Q` (macOS: `⌘Q`) | Quit Peekaboo |
+
+The hotkey is saved in `hotkey.json` in the app's config directory (`~/.config/com.peekaboo.app/` on Linux), separately from the other settings, because it is registered before the UI loads. Delete the file to go back to the default.
+
+If your desktop will not let Peekaboo grab the hotkey, bind the `peekaboo-app` command to any key in your desktop's own keyboard settings instead: launching the binary while it is already running toggles the overlay.
 
 ---
 
@@ -144,11 +149,11 @@ Plugins receive a context object with clipboard access, primary-selection reads,
 
 ## Platform notes
 
-Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities are constrained by the Wayland security model rather than by Peekaboo:
+Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities are constrained by the Wayland security model rather than by Peekaboo. On GNOME the tray icon needs an AppIndicator extension; without one, quit with `Ctrl+Q` from the overlay.
 
 | Capability | Status |
 | --- | --- |
-| Global shortcuts | Works everywhere |
+| Global shortcuts | X11, and GNOME Wayland (Mutter honours the XWayland grab). **Does not fire on KDE Wayland, Sway or Hyprland**, where the underlying `global-hotkey` crate has no backend; use your desktop's keyboard settings to bind the `peekaboo-app` command (see Keyboard shortcuts) until the planned portal-based implementation lands. |
 | Primary selection capture | Works (Wayland via `wl-paste`, X11 via `xclip`) |
 | Screen region capture | Works via `xdg-desktop-portal`. GNOME's private screenshot API is denied to unwhitelisted callers on GNOME 50, so the portal is the only path — it prompts once, then remembers. |
 | Active window / app detection | **Not available on GNOME Wayland.** `org.gnome.Shell.Introspect.GetWindows` is whitelist-gated and there is no portal equivalent. Would require a GNOME Shell extension. |

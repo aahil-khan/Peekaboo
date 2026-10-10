@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { usePeekStore } from '../store/peek';
 import { togglePanel } from './usePanels';
+import { isQuitChord } from '../lib/hotkey';
 
 type KeyHandler = (e: KeyboardEvent) => void;
 
@@ -11,11 +12,12 @@ interface ShortcutHandlers {
   onStop: () => void;
   onCaptureRegion: () => void;
   onCopyLast: () => void;
+  onQuit: () => void;
 }
 
 export function useShortcuts(handlers: ShortcutHandlers) {
   const { visible } = usePeekStore();
-  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast } = handlers;
+  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit } = handlers;
 
   useEffect(() => {
     if (!visible) return;
@@ -40,6 +42,13 @@ export function useShortcuts(handlers: ShortcutHandlers) {
       if (e.key === 'Escape') {
         e.preventDefault();
         onEscape();
+        return;
+      }
+
+      // Ctrl+Q (⌘Q on a Mac) → quit, for desktops with no tray to quit from.
+      if (isQuitChord(e)) {
+        e.preventDefault();
+        onQuit();
         return;
       }
 
@@ -87,5 +96,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast]);
+  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit]);
 }

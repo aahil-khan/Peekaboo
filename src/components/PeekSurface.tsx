@@ -17,6 +17,8 @@ import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
 import { useShortcuts } from '../hooks/useShortcuts';
+import { useHotkeyStore } from '../store/hotkey';
+import { formatHotkey } from '../lib/hotkey';
 import { togglePanel, closePanels } from '../hooks/usePanels';
 import { useAttachments, type Attachment } from '../hooks/useAttachments';
 import { registry } from '../lib/plugins/registry';
@@ -535,6 +537,7 @@ export const PeekSurface: React.FC = () => {
     onStop: abortStream,
     onCaptureRegion: handleCaptureRegion,
     onCopyLast: handleCopyLast,
+    onQuit: () => { void invoke('quit_app'); },
   });
 
   // Generic Provider status check
@@ -565,6 +568,7 @@ export const PeekSurface: React.FC = () => {
   }, []);
 
   const { overlayTourSeen, setOverlayTourSeen } = useSettingsStore();
+  const summonHotkey = useHotkeyStore((s) => s.hotkey);
   const showFirstRunHint = !overlayTourSeen && !hasConversation && attachments.length === 0;
 
   /*
@@ -731,6 +735,7 @@ export const PeekSurface: React.FC = () => {
                     <span className="peek-hint-item"><kbd className="peek-kbd">Enter</kbd> to ask</span>
                     <span className="peek-hint-item"><kbd className="peek-kbd">Alt+/</kbd> all shortcuts</span>
                     <span className="peek-hint-item"><kbd className="peek-kbd">Esc</kbd> to hide</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">{formatHotkey(summonHotkey)}</kbd> to bring it back</span>
                   </div>
                   <button className="peek-hint-dismiss" onClick={() => setOverlayTourSeen(true)}>
                     Got it

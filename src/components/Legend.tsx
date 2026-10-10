@@ -1,21 +1,38 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { invoke } from '@tauri-apps/api/core';
 import { usePeekStore } from '../store/peek';
+import { useHotkeyStore } from '../store/hotkey';
 import { historyVariants, panelRowVariants } from '../lib/motion';
+import { formatHotkey, quitHotkey } from '../lib/hotkey';
+
+interface LegendKey {
+  key: string;
+  description: string;
+  /** A row that does the thing when clicked, for actions with no other button. */
+  onActivate?: () => void;
+}
 
 /**
  * Grouped rather than listed flat: seventeen undifferentiated rows is a wall,
  * and the bindings a new user actually needs first are the four in Essentials.
+ * Built per render because the summon chord is whatever the user configured.
  */
-const HOTKEY_GROUPS: { title: string; keys: { key: string; description: string }[] }[] = [
+const hotkeyGroups = (summon: string): { title: string; keys: LegendKey[] }[] => [
   {
     title: 'Essentials',
     keys: [
-      { key: 'Ctrl+Space', description: 'Summon or hide Peekaboo' },
-      { key: 'Alt+Space', description: 'Summon or hide (alternate)' },
+      { key: formatHotkey(summon), description: 'Summon or hide Peekaboo' },
       { key: 'Enter', description: 'Send message' },
       { key: 'Shift+Enter', description: 'New line' },
       { key: 'Escape', description: 'Hide window, or dismiss a panel' },
+      // Quit lives here rather than only in the tray because GNOME has no tray
+      // without an extension. The row is clickable for the same reason.
+      {
+        key: formatHotkey(quitHotkey()),
+        description: 'Quit Peekaboo',
+        onActivate: () => { void invoke('quit_app'); },
+      },
     ],
   },
   {
@@ -47,10 +64,11 @@ const HOTKEY_GROUPS: { title: string; keys: { key: string; description: string }
   },
 ];
 
-const TOTAL_SHORTCUTS = HOTKEY_GROUPS.reduce((n, g) => n + g.keys.length, 0);
-
 export const Legend: React.FC = () => {
   const { isLegendOpen, setLegendOpen } = usePeekStore();
+  const summonHotkey = useHotkeyStore((s) => s.hotkey);
+  const groups = hotkeyGroups(summonHotkey);
+  const totalShortcuts = groups.reduce((n, g) => n + g.keys.length, 0);
 
   React.useEffect(() => {
     if (!isLegendOpen) return;
@@ -84,7 +102,7 @@ export const Legend: React.FC = () => {
               </svg>
             </span>
             <span className="peek-history-title">Shortcuts</span>
-            <span className="peek-panel-count">{TOTAL_SHORTCUTS}</span>
+            <span className="peek-panel-count">{totalShortcuts}</span>
             <span className="peek-panel-spacer" />
             <span className="peek-panel-esc">esc</span>
             <button
@@ -99,15 +117,27 @@ export const Legend: React.FC = () => {
             </button>
           </motion.div>
           <div className="peek-history-list">
-            {HOTKEY_GROUPS.map((group) => (
+            {groups.map((group) => (
               <motion.div key={group.title} variants={panelRowVariants}>
                 <div className="peek-legend-group">{group.title}</div>
-                {group.keys.map((hk) => (
-                  <div key={hk.key} className="peek-legend-row">
-                    <span className="peek-legend-desc">{hk.description}</span>
-                    <kbd className="peek-kbd">{hk.key}</kbd>
-                  </div>
-                ))}
+                {group.keys.map((hk) =>
+                  hk.onActivate ? (
+                    <button
+                      key={hk.key}
+                      type="button"
+                      className="peek-legend-row peek-legend-row--action"
+                      onClick={hk.onActivate}
+                    >
+                      <span className="peek-legend-desc">{hk.description}</span>
+                      <kbd className="peek-kbd">{hk.key}</kbd>
+                    </button>
+                  ) : (
+                    <div key={hk.key} className="peek-legend-row">
+                      <span className="peek-legend-desc">{hk.description}</span>
+                      <kbd className="peek-kbd">{hk.key}</kbd>
+                    </div>
+                  )
+                )}
               </motion.div>
             ))}
           </div>
