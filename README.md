@@ -1,5 +1,7 @@
 # Peekaboo
 
+[![CI](https://github.com/aahil-khan/Peekaboo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aahil-khan/Peekaboo/actions/workflows/ci.yml)
+
 **An AI overlay that actually works on Linux, and isn't locked to one vendor's model.**
 
 Hit `Ctrl+Space` anywhere. Ask. Get an answer. It disappears.
