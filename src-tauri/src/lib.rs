@@ -843,7 +843,11 @@ mod plugin_commands {
         #[test]
         fn refuses_paths_outside_home() {
             let s = Scratch::new("outside");
-            let err = check_allowed_in(s.home(), &s.data(), "/etc/passwd")
+            // A sibling of the scratch home rather than /etc/passwd: /etc does
+            // not exist on Windows, where the path would fail to resolve before
+            // the rule under test ever ran.
+            let outside = s.root.with_file_name("not-in-home.txt");
+            let err = check_allowed_in(s.home(), &s.data(), &outside.to_string_lossy())
                 .expect_err("paths outside home must be refused");
             assert!(err.contains("outside your home"), "unexpected message: {err}");
         }
