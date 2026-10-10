@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A newer push to the same PR or branch makes the run before it worthless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # PowerShell is the Windows default and quotes differently; bash is on all
+    # three runners, so every step means the same thing everywhere.
+    shell: bash
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test --if-present
+
+  rust:
+    name: Rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      # One OS failing must not hide the state of the other two.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Tauri system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      # rustup ships on all three runner images, so no action is needed for it.
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      # Only main writes the cache. A pull request can read main's cache but not
+      # another pull request's, so saving from each one would spend the
+      # repository's 10 GB quota on copies nothing else can use.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - run: npm ci
+
+      # tauri::generate_context! reads dist/ at compile time, so the frontend
+      # has to exist before Cargo runs at all.
+      - run: npm run build
+
+      - name: Unit tests
+        working-directory: src-tauri
+        run: cargo test --lib
+
+      # Tests only build the library. This links the real binary, which is what
+      # proves the whole app builds on this OS. Bundling (installers, signing)
+      # is deliberately left out.
+      - name: Debug build without bundling
+        run: npx tauri build --debug --no-bundle

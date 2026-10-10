@@ -16,6 +16,9 @@ dist-ssr
 # machine and one person; nothing here is shared.
 .claude/
 
+# Snapshots and logs the Playwright MCP server leaves behind while driving a browser.
+.playwright-mcp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
