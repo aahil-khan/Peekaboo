@@ -15,7 +15,19 @@ interface ProviderFieldsProps {
   provider: string;
   /** Called whenever a value changes, so callers can reset verification state. */
   onChange?: () => void;
+  /** Also show tuning that is not needed to get connected. Settings sets this;
+   *  the setup wizard does not, to keep first run to the one field that matters. */
+  advanced?: boolean;
 }
+
+// Values are Ollama's `keep_alive`: a duration, 0 to unload at once, -1 for never.
+const KEEP_ALIVE_CHOICES: Array<{ value: string; label: string }> = [
+  { value: '0', label: 'Unload now' },
+  { value: '5m', label: '5 min' },
+  { value: '30m', label: '30 min' },
+  { value: '1h', label: '1 hour' },
+  { value: '-1', label: 'Keep loaded' },
+];
 
 const HelpLink: React.FC<{ provider: string }> = ({ provider }) => {
   const info = findProvider(provider);
@@ -31,9 +43,10 @@ const HelpLink: React.FC<{ provider: string }> = ({ provider }) => {
   );
 };
 
-export const ProviderFields: React.FC<ProviderFieldsProps> = ({ provider, onChange }) => {
+export const ProviderFields: React.FC<ProviderFieldsProps> = ({ provider, onChange, advanced }) => {
   const {
     ollamaBaseUrl, setOllamaBaseUrl,
+    ollamaKeepAlive, setOllamaKeepAlive,
     openaiApiKey, setOpenaiApiKey,
     openaiBaseUrl, setOpenaiBaseUrl,
     anthropicApiKey, setAnthropicApiKey,
@@ -59,6 +72,28 @@ export const ProviderFields: React.FC<ProviderFieldsProps> = ({ provider, onChan
           />
           <HelpLink provider={provider} />
         </div>
+        {advanced && (
+          <div className="peek-form-row">
+            <label className="peek-form-label">Keep model loaded</label>
+            <span className="peek-form-hint">
+              How long the model stays in memory after an answer. Longer makes the next
+              question start faster; the model's RAM or VRAM stays in use until then.
+            </span>
+            {/* Five labels are wider than the card at the window's minimum size. */}
+            <div className="peek-segmented" style={{ alignSelf: 'flex-start', flexWrap: 'wrap', maxWidth: '100%' }}>
+              {KEEP_ALIVE_CHOICES.map((choice) => (
+                <button
+                  key={choice.value}
+                  type="button"
+                  aria-pressed={ollamaKeepAlive === choice.value}
+                  onClick={() => setOllamaKeepAlive(choice.value)}
+                >
+                  {choice.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

@@ -1,4 +1,5 @@
 import type { Provider, Message, ModelInfo } from './types';
+import { httpFetch, httpOk, readLines, sseData, apiError } from './http';
 
 const DEFAULT_BASE_URL = 'http://127.0.0.1:8080';
 
@@ -31,7 +32,7 @@ export class LlamaProvider implements Provider {
       return { role: m.role, content: parts };
     });
 
-    const res = await fetch(`${this.baseUrl}/v1/chat/completions`, {
+    const res = await httpFetch(`${this.baseUrl}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
@@ -39,42 +40,28 @@ export class LlamaProvider implements Provider {
     });
 
     if (!res.ok) {
-      throw new Error(`llama.cpp error: ${res.status} ${res.statusText}`);
+      throw await apiError('llama.cpp', res);
     }
 
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || !trimmed.startsWith('data:')) continue;
-        const data = trimmed.slice(5).trim();
-        if (data === '[DONE]') {
-          return;
-        }
-        try {
-          const json = JSON.parse(data);
-          const delta = json.choices?.[0]?.delta?.content ?? '';
-          yield delta;
-        } catch {
-          console.warn('Peekaboo: skipped malformed llama chunk:', data);
-        }
+    for await (const line of readLines(res, signal)) {
+      const data = sseData(line);
+      if (data === null) continue;
+      if (data === '[DONE]') {
+        return;
+      }
+      try {
+        const json = JSON.parse(data);
+        const delta = json.choices?.[0]?.delta?.content;
+        if (delta) yield delta;
+      } catch {
+        console.warn('Peekaboo: skipped malformed llama chunk:', data);
       }
     }
   }
 
   async models(): Promise<ModelInfo[]> {
     try {
-      const res = await fetch(`${this.baseUrl}/v1/models`);
+      const res = await httpFetch(`${this.baseUrl}/v1/models`);
       if (!res.ok) return [];
       const data = await res.json();
       return (data.data || []).map((m: any) => ({
@@ -88,10 +75,10 @@ export class LlamaProvider implements Provider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.baseUrl}/v1/models`, {
+      return await httpOk(`${this.baseUrl}/v1/models`, {
         signal: AbortSignal.timeout(2000),
+        connectTimeout: 2000,
       });
-      return res.ok;
     } catch {
       return false;
     }

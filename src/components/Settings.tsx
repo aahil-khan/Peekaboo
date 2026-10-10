@@ -278,7 +278,7 @@ export const Settings: React.FC = () => {
 
               {draftProvider !== 'llama' && (
                 <>
-                  <ProviderFields provider={draftProvider} onChange={() => setVerifyState('idle')} />
+                  <ProviderFields provider={draftProvider} onChange={() => setVerifyState('idle')} advanced />
 
                   <div className="peek-settings-row">
                     <span
