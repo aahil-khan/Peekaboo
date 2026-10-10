@@ -636,8 +636,11 @@ export const PeekSurface: React.FC = () => {
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
   const { isOpen: isHistoryOpen } = useHistoryStore();
-  const isMenuOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen || hasActiveModalHeight;
-  const gridMinHeight = hasActiveModalHeight ? 350 : (isMenuOpen ? 280 : undefined);
+  const isPanelOpen = isModelsOpen || isLegendOpen || isHistoryOpen || memoryOverlay.isOpen;
+  // The attachment viewer is a true modal and covers the grid, input included.
+  // A panel is not — it reserves height in the body below the input instead.
+  const gridMinHeight = hasActiveModalHeight ? 350 : undefined;
+  const bodyMinHeight = isPanelOpen ? 240 : undefined;
 
   useEffect(() => {
     if (!setupCompleted) {
@@ -735,32 +738,39 @@ export const PeekSurface: React.FC = () => {
                 </div>
               )}
 
-              {/* Conversation transcript. Keyed on the session so switching
-                  history entries remounts cleanly at the bottom. */}
-              <AnimatePresence>
-                {hasConversation && (
-                  <Transcript
-                    key={`peek-transcript-${activeSessionId || 'new'}`}
-                    messages={messages}
-                    streamingContent={streamingContent}
-                    isStreaming={isStreaming}
-                    onClickAttachment={handleViewAttachment}
-                  />
-                )}
-              </AnimatePresence>
-            </div>
+              {/* The transcript and the four panels share this box, and the
+                  panels are positioned against it rather than the whole
+                  surface. A panel therefore covers the conversation and
+                  nothing else: what you were typing survives opening one, and
+                  the footer's buttons stay reachable, so you can go from
+                  History straight to Models without closing anything. */}
+              <div
+                className="peek-body"
+                style={{
+                  minHeight: bodyMinHeight,
+                  transition: 'min-height 0.15s ease-out',
+                }}
+              >
+                {/* Conversation transcript. Keyed on the session so switching
+                    history entries remounts cleanly at the bottom. */}
+                <AnimatePresence>
+                  {hasConversation && (
+                    <Transcript
+                      key={`peek-transcript-${activeSessionId || 'new'}`}
+                      messages={messages}
+                      streamingContent={streamingContent}
+                      isStreaming={isStreaming}
+                      onClickAttachment={handleViewAttachment}
+                    />
+                  )}
+                </AnimatePresence>
 
-            {/* History Panel */}
-            <History onSelectSession={handleSelectSession} />
-            
-            {/* Models Panel */}
-            <Models />
-            
-            {/* Shortcuts Legend */}
-            <Legend />
-            
-            {/* Memory Overlay */}
-            <MemoryOverlay />
+                <History onSelectSession={handleSelectSession} />
+                <Models />
+                <Legend />
+                <MemoryOverlay />
+              </div>
+            </div>
 
             {/* Attachment Viewer Modal */}
             <AnimatePresence onExitComplete={() => {
