@@ -822,6 +822,21 @@ html[data-window='peek'] {
   min-height: 0;
 }
 
+/*
+ * The transcript, and the containing block for the four overlay panels.
+ *
+ * Panels used to be absolutely positioned against the whole grid, so opening
+ * one blacked out the input along with the conversation — you lost sight of
+ * what you had typed, and the only way between two panels was to close the
+ * first. Scoping them here costs nothing and keeps the input live.
+ */
+.peek-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 /* ═══ Input ═════════════════════════════════════════════════════════════ */
 
 .peek-input-container {
@@ -1495,9 +1510,11 @@ html[data-window='peek'] {
 /*
  * Shared by History, Models, Legend and the Memory overlay.
  *
- * Fills the content area, which excludes the footer — the action bar is a
- * sibling of this stacking context, not inside it, so it stays visible and
- * clickable while a panel is up.
+ * Fills .peek-body, which is the conversation area only — the input above and
+ * the footer below are both outside this stacking context, so a panel leaves
+ * your half-typed question intact and the action bar clickable. Square, and
+ * separated by a rule, because it now meets the input rather than the rounded
+ * edge of the window.
  *
  * The background is fully opaque. The surface beneath is translucent over the
  * live desktop, and a translucent panel on top of it let the wallpaper and
@@ -1511,7 +1528,7 @@ html[data-window='peek'] {
   background: var(--peek-panel-bg);
   min-height: 200px;
   z-index: 10;
-  border-radius: var(--peek-radius-lg);
+  border-top: 1px solid var(--peek-border);
   overflow: hidden;
 }
 
