@@ -38,12 +38,16 @@ import {
   getRecentSessions,
   getSessionMessages,
   searchMemories,
+  getPinnedMemories,
   cleanOldSessions,
 } from '../db/database';
+import { composeSystemPrompt } from '../lib/pinnedMemories';
 
 function generateId(): string {
   return crypto.randomUUID();
 }
+
+const PROVIDER_CHECK_INTERVAL_MS = 30_000;
 
 export const PeekSurface: React.FC = () => {
   const {
@@ -66,7 +70,7 @@ export const PeekSurface: React.FC = () => {
   const { 
     activeModel, setActiveModel, 
     activeProvider,
-    ollamaBaseUrl, llamaBaseUrl,
+    ollamaBaseUrl, ollamaKeepAlive, llamaBaseUrl,
     openaiApiKey, openaiBaseUrl,
     anthropicApiKey, geminiApiKey,
     setupCompleted
@@ -98,13 +102,13 @@ export const PeekSurface: React.FC = () => {
   const provider = useMemo(() => {
     switch (activeProvider) {
       case 'llama': return new LlamaProvider(llamaBaseUrl);
-      case 'ollama': return new OllamaProvider(ollamaBaseUrl);
+      case 'ollama': return new OllamaProvider(ollamaBaseUrl, ollamaKeepAlive);
       case 'openai': return new OpenAIProvider(openaiBaseUrl, openaiApiKey);
       case 'anthropic': return new AnthropicProvider(anthropicApiKey);
       case 'gemini': return new GeminiProvider(geminiApiKey);
       default: return new ModelPluginProvider(activeProvider, activeProvider);
     }
-  }, [activeProvider, ollamaBaseUrl, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey]);
+  }, [activeProvider, ollamaBaseUrl, ollamaKeepAlive, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey]);
 
   const surfaceRef = useRef<HTMLDivElement>(null);
 
@@ -305,10 +309,22 @@ export const PeekSurface: React.FC = () => {
 
     const allMessages = [...messages, userMessage];
     
-    const { systemPrompt } = useSettingsStore.getState();
+    // Pinned memories ride along in the system message only. They are never
+    // added to the conversation or the messages table, so reloading a session
+    // from history cannot duplicate them.
+    const { systemPrompt, includePinnedMemories } = useSettingsStore.getState();
+    let pinnedMemories: Awaited<ReturnType<typeof getPinnedMemories>> = [];
+    if (includePinnedMemories) {
+      try {
+        pinnedMemories = await getPinnedMemories();
+      } catch (err) {
+        console.warn('Failed to read pinned memories; sending the question without them:', err);
+      }
+    }
+    const { systemPrompt: finalSystemPrompt } = composeSystemPrompt(systemPrompt, pinnedMemories);
     const streamPayload = [];
-    if (systemPrompt && systemPrompt.trim()) {
-      streamPayload.push({ role: 'system' as const, content: systemPrompt.trim() });
+    if (finalSystemPrompt) {
+      streamPayload.push({ role: 'system' as const, content: finalSystemPrompt });
     }
     streamPayload.push(...allMessages);
 
@@ -544,21 +560,35 @@ export const PeekSurface: React.FC = () => {
   const [providerStatus, setProviderStatus] = React.useState<
     'checking' | 'connected' | 'disconnected'
   >('checking');
+  // A status belongs to the provider it was measured for. Without this, the
+  // footer would report the previous provider's result under the new one's
+  // name until the next check came back — including "can't reach" right after
+  // the user fixed their key in Settings.
   useEffect(() => {
+    setProviderStatus('checking');
+  }, [provider]);
+  /*
+   * Checked when the overlay appears (or the provider changes while it is up)
+   * and every 30s after that, and not at all while hidden. The overlay spends
+   * nearly all of its life hidden; polling through that was a request every
+   * five seconds, all day, for a status nobody could see.
+   */
+  useEffect(() => {
+    if (!visible) return;
     let mounted = true;
     const check = async () => {
-      const available = await provider.isAvailable();
+      const available = await provider.isAvailable().catch(() => false);
       if (mounted) {
         setProviderStatus(available ? 'connected' : 'disconnected');
       }
     };
     check();
-    const interval = setInterval(check, 5000);
+    const interval = setInterval(check, PROVIDER_CHECK_INTERVAL_MS);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [provider]);
+  }, [provider, visible]);
 
   const hasConversation = isStreaming || messages.some((m) => m.role !== 'system');
 
