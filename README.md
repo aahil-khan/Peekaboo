@@ -154,7 +154,7 @@ Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities 
 | Active window / app detection | **Not available on GNOME Wayland.** `org.gnome.Shell.Introspect.GetWindows` is whitelist-gated and there is no portal equivalent. Would require a GNOME Shell extension. |
 | Typing answers into other apps | Not yet implemented. Feasible on Wayland via the RemoteDesktop portal (no root or `ydotool` needed); tracked for a future release. |
 
-Windows and macOS aren't currently targeted. Screen capture is Linux-only today.
+On Windows and macOS, CI builds the whole app and runs the Rust unit tests on every change, but the app has not yet been run on either: screen region capture is Linux-only, and on Windows user-installed plugins and plugin file access do not work yet.
 
 ---
 
