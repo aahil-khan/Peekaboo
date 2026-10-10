@@ -37,6 +37,7 @@ export const Settings: React.FC = () => {
     activeLlamaProfileId, setActiveLlamaProfileId,
     historyRetentionDays, setHistoryRetentionDays,
     systemPrompt, setSystemPrompt,
+    includePinnedMemories, setIncludePinnedMemories,
     autoCopyOnHide, setAutoCopyOnHide,
     themeId, setThemeId,
     followSystem, setFollowSystem,
@@ -432,6 +433,26 @@ export const Settings: React.FC = () => {
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder="e.g. Answer briefly. Prefer examples over explanation."
                   style={{ minHeight: 140 }}
+                />
+              </div>
+
+              <div className="peek-settings-divider" />
+
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Send pinned memories</span>
+                  <span className="peek-settings-desc">
+                    Pinned memories are sent to the selected model with every question, including
+                    cloud models such as OpenAI, Anthropic and Gemini. Unpinned memories stay on
+                    this machine until you insert one yourself.
+                  </span>
+                </span>
+                <button
+                  className="peek-switch"
+                  role="switch"
+                  aria-checked={includePinnedMemories}
+                  aria-label="Send pinned memories with every question"
+                  onClick={() => setIncludePinnedMemories(!includePinnedMemories)}
                 />
               </div>
             </div>

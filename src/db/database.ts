@@ -219,3 +219,24 @@ export async function searchMemories(query: string = '', limit: number = 20): Pr
     updatedAt: r.updated_at
   }));
 }
+
+/**
+ * Every pinned memory, oldest first. Unlike searchMemories this has no limit:
+ * the prompt composer decides what fits, and the panel needs the full set to
+ * say how many are being sent.
+ */
+export async function getPinnedMemories(): Promise<Memory[]> {
+  const d = await getDb();
+  const rows = await d.select<{ id: string; content: string; created_at: number; updated_at: number; is_pinned: number; usage_count: number; last_used_at: number | null }[]>(
+    'SELECT * FROM memories WHERE is_pinned = 1 ORDER BY created_at ASC, id ASC'
+  );
+  return rows.map(r => ({
+    id: r.id,
+    content: r.content,
+    isPinned: true,
+    usageCount: r.usage_count || 0,
+    lastUsedAt: r.last_used_at,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at
+  }));
+}

@@ -43,6 +43,8 @@ interface SettingsState {
   historyRetentionDays: number;
   isModelsOpen: boolean;
   systemPrompt: string;
+  /** Send pinned memories with every question (they leave the machine on cloud providers). */
+  includePinnedMemories: boolean;
   autoCopyOnHide: boolean;
   /** Palette id from src/lib/themes.ts. */
   themeId: string;
@@ -77,6 +79,7 @@ interface SettingsState {
   setActiveLlamaProfileId: (id: string | null) => void;
   setModelsOpen: (v: boolean) => void;
   setSystemPrompt: (v: string) => void;
+  setIncludePinnedMemories: (v: boolean) => void;
   setAutoCopyOnHide: (v: boolean) => void;
 }
 
@@ -93,6 +96,9 @@ export const useSettingsStore = create<SettingsState>()(
       historyRetentionDays: 90,
       isModelsOpen: false,
       systemPrompt: 'You are Peekaboo, a highly capable, concise, and helpful AI desktop assistant. Do not use conversational filler. Provide direct, accurate answers.',
+      // On by default: a pin is the user's own request that the model know
+      // this. The toggle exists because cloud providers then see it too.
+      includePinnedMemories: true,
       // Off by default on purpose: copying on every dismiss would silently
       // destroy whatever the user already had on their clipboard.
       autoCopyOnHide: false,
@@ -141,6 +147,7 @@ export const useSettingsStore = create<SettingsState>()(
       }),
       setModelsOpen: (v) => set({ isModelsOpen: v }),
       setSystemPrompt: (v) => set({ systemPrompt: v }),
+      setIncludePinnedMemories: (v) => set({ includePinnedMemories: v }),
       setAutoCopyOnHide: (v) => set({ autoCopyOnHide: v }),
     }),
     {

@@ -52,7 +52,7 @@ Peekaboo takes a different shape:
 **Local storage**
 - SQLite-backed session history with search, rename, and delete
 - Configurable retention (default 90 days)
-- A memory system with pinning, usage tracking, and search
+- A memory system with pinning, usage tracking, and search. Pinned memories are sent to the model with every question (see below).
 
 ---
 
@@ -97,6 +97,20 @@ On first run, a setup window walks you through picking a backend.
 | `Alt+/` | Shortcut legend |
 | `Alt+←` / `Alt+→` | Previous / next exchange |
 | `Esc` | Dismiss |
+
+---
+
+## Memories
+
+`Alt+R` opens the memory panel. Save anything you want to keep: a fact about yourself, a snippet, a standing instruction. Memories live in the local SQLite file and never leave the machine on their own.
+
+**Pinning changes that.** A pinned memory is sent to the selected model with every question, appended to the system prompt as a bulleted block under a short heading. That includes cloud models (OpenAI, Anthropic, Gemini), so pin only what you are happy to send to whichever provider is active. Unpinned memories are never sent; you insert them yourself with `Shift+Enter` in the panel, or copy them with `Enter`.
+
+- Pinned memories are sent oldest first and capped at about 4,000 characters in total. A memory that would push the block over the cap is left out whole, never cut, and the panel marks it "not sent" so nothing is dropped silently.
+- The panel header says how many pinned memories the next question will carry.
+- The "Remember" button under an answer and the "Remember code snippet" button on a code block save unpinned memories. Nothing is sent until you pin it.
+- Sending is on by default and can be turned off in Settings → Assistant → "Send pinned memories". Off, pinned memories behave like any other saved memory.
+- The injected block is not stored with the conversation, so loading an old session from history does not replay it, and sending does not count as a "use" in the panel's usage statistics.
 
 ---
 

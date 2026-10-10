@@ -36,8 +36,10 @@ import {
   getRecentSessions,
   getSessionMessages,
   searchMemories,
+  getPinnedMemories,
   cleanOldSessions,
 } from '../db/database';
+import { composeSystemPrompt } from '../lib/pinnedMemories';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -303,10 +305,22 @@ export const PeekSurface: React.FC = () => {
 
     const allMessages = [...messages, userMessage];
     
-    const { systemPrompt } = useSettingsStore.getState();
+    // Pinned memories ride along in the system message only. They are never
+    // added to the conversation or the messages table, so reloading a session
+    // from history cannot duplicate them.
+    const { systemPrompt, includePinnedMemories } = useSettingsStore.getState();
+    let pinnedMemories: Awaited<ReturnType<typeof getPinnedMemories>> = [];
+    if (includePinnedMemories) {
+      try {
+        pinnedMemories = await getPinnedMemories();
+      } catch (err) {
+        console.warn('Failed to read pinned memories; sending the question without them:', err);
+      }
+    }
+    const { systemPrompt: finalSystemPrompt } = composeSystemPrompt(systemPrompt, pinnedMemories);
     const streamPayload = [];
-    if (systemPrompt && systemPrompt.trim()) {
-      streamPayload.push({ role: 'system' as const, content: systemPrompt.trim() });
+    if (finalSystemPrompt) {
+      streamPayload.push({ role: 'system' as const, content: finalSystemPrompt });
     }
     streamPayload.push(...allMessages);
 
