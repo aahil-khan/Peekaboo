@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { usePeekStore } from '../store/peek';
+import { useSettingsStore } from '../store/settings';
 import { historyVariants, panelRowVariants } from '../lib/motion';
-import { saveMemory, deleteMemory, updateMemory, togglePinMemory, incrementMemoryUsage } from '../db/database';
+import { saveMemory, deleteMemory, updateMemory, togglePinMemory, incrementMemoryUsage, getPinnedMemories } from '../db/database';
+import { planPinnedMemories } from '../lib/pinnedMemories';
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -23,6 +25,7 @@ function timeAgo(timestamp: number): string {
 export const MemoryOverlay: React.FC = () => {
   const { memoryOverlay, setMemoryOverlay, input, setInput } = usePeekStore();
   const { isOpen, title, items, initialSearchQuery } = memoryOverlay;
+  const includePinnedMemories = useSettingsStore((s) => s.includePinnedMemories);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLTextAreaElement>(null);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
@@ -37,6 +40,31 @@ export const MemoryOverlay: React.FC = () => {
 
   // Copy indicator state
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // Which pinned memories the next question will carry. Read from the
+  // database rather than derived from `items`, because the list is capped
+  // and the count has to be honest.
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
+  const [leftOutIds, setLeftOutIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    (async () => {
+      let pinned = items.filter((i) => i.isPinned);
+      try {
+        pinned = await getPinnedMemories();
+      } catch {
+        // Fall back to what the panel already holds; the count may be short.
+      }
+      if (cancelled) return;
+      const plan = planPinnedMemories(pinned);
+      setSentIds(new Set(plan.included.map((m) => m.id)));
+      setLeftOutIds(new Set(plan.omitted.map((m) => m.id)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, items]);
 
   // Reset state when opening/closing
   useEffect(() => {
@@ -276,6 +304,29 @@ export const MemoryOverlay: React.FC = () => {
               </svg>
             </button>
           </motion.div>
+
+          {items.some((i) => i.isPinned) && (
+            <div className="peek-hint" style={{ borderBottom: '1px solid var(--peek-border)' }}>
+              <span className="peek-hint-items">
+                {includePinnedMemories ? (
+                  <>
+                    <span className="peek-hint-item">
+                      {sentIds.size} pinned {sentIds.size === 1 ? 'memory is' : 'memories are'} sent with every question
+                    </span>
+                    {leftOutIds.size > 0 && (
+                      <span className="peek-hint-item peek-tone-warn">
+                        {leftOutIds.size} left out: over the size limit
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="peek-hint-item">
+                    Pinned memories are not being sent (off in Settings → Assistant)
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
           
           <AnimatePresence>
             {isSearchVisible && (
@@ -430,7 +481,8 @@ export const MemoryOverlay: React.FC = () => {
                         <div className="peek-history-item-actions" style={{ marginTop: 2 }}>
                           <div 
                             className="peek-history-action-btn"
-                            title={item.isPinned ? "Unpin" : "Pin memory"}
+                            title={item.isPinned ? "Unpin: stop sending with every question" : "Pin: send with every question"}
+                            aria-label={item.isPinned ? "Unpin: stop sending with every question" : "Pin: send with every question"}
                             onClick={(e) => handleTogglePin(e, item)}
                             style={{ color: item.isPinned ? 'var(--peek-pin)' : 'inherit' }}
                           >
@@ -476,7 +528,15 @@ export const MemoryOverlay: React.FC = () => {
                       color: 'var(--peek-text-muted)',
                       opacity: 0.7 
                     }}>
-                      {item.isPinned && <span style={{ color: 'var(--peek-pin)' }}>Pinned</span>}
+                      {item.isPinned && (
+                        includePinnedMemories && leftOutIds.has(item.id) ? (
+                          <span className="peek-tone-warn">Pinned · not sent (over size limit)</span>
+                        ) : (
+                          <span style={{ color: 'var(--peek-pin)' }}>
+                            {includePinnedMemories && sentIds.has(item.id) ? 'Pinned · sent with every question' : 'Pinned'}
+                          </span>
+                        )
+                      )}
                       <span>{timeAgo(item.createdAt)}</span>
                       {item.usageCount > 0 && <span>Used {item.usageCount} time{item.usageCount !== 1 ? 's' : ''}</span>}
                       {item.lastUsedAt && <span>Active {timeAgo(item.lastUsedAt)}</span>}
