@@ -11,6 +11,8 @@ import {
   verifyProvider,
   type ProviderInfo,
 } from '../lib/providerCatalog';
+import { useHotkeyStore } from '../store/hotkey';
+import { hotkeyParts } from '../lib/hotkey';
 
 /**
  * First-run wizard.
@@ -42,6 +44,7 @@ export const Setup: React.FC = () => {
     setActiveModel,
   } = useSettingsStore();
   const { manifests, refreshManifests } = usePluginsStore();
+  const summonHotkey = useHotkeyStore((s) => s.hotkey);
 
   const [step, setStep] = useState<Step>('provider');
   const [chosen, setChosen] = useState<string>(activeProvider || 'ollama');
@@ -276,9 +279,12 @@ export const Setup: React.FC = () => {
               Peekaboo lives in your tray and stays out of the way until you call it.
             </p>
             <div className="peek-wizard-keys">
-              <kbd className="peek-kbd">Ctrl</kbd>
-              <span className="peek-form-hint">+</span>
-              <kbd className="peek-kbd">Space</kbd>
+              {hotkeyParts(summonHotkey).map((part, i) => (
+                <React.Fragment key={`${i}-${part}`}>
+                  {i > 0 && <span className="peek-form-hint">+</span>}
+                  <kbd className="peek-kbd">{part}</kbd>
+                </React.Fragment>
+              ))}
             </div>
             <p className="peek-wizard-subtitle">
               Press that anywhere to summon it. <kbd className="peek-kbd">Alt</kbd>

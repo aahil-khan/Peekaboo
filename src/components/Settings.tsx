@@ -5,6 +5,7 @@ import { useSettingsStore, LlamaProfile } from '../store/settings';
 import { THEME_ACCENTS, findTheme, themesByFamily } from '../lib/themes';
 import { LlamaProfileEditor } from './LlamaProfileEditor';
 import { ProviderFields } from './ProviderFields';
+import { HotkeyRecorder } from './HotkeyRecorder';
 import { useLlamaServer } from '../hooks/useLlamaServer';
 import { usePluginsStore } from '../store/plugins';
 import { BUILTIN_PROVIDERS, providerLabel, verifyProvider } from '../lib/providerCatalog';
@@ -67,7 +68,8 @@ export const Settings: React.FC = () => {
     // Focus so the Escape binding below works without a click first.
     window.focus();
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // The hotkey recorder uses Escape to cancel; it marks the event handled.
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         import('@tauri-apps/api/webviewWindow').then(({ getCurrentWebviewWindow }) => {
           getCurrentWebviewWindow().close();
         });
@@ -210,19 +212,7 @@ export const Settings: React.FC = () => {
             </div>
 
             <div className="peek-settings-card">
-              <div className="peek-settings-row">
-                <span className="peek-settings-rowtext">
-                  <span className="peek-settings-label">Summon Peekaboo</span>
-                  <span className="peek-settings-desc">
-                    Works from any app. Not currently rebindable.
-                  </span>
-                </span>
-                <span style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                  <kbd className="peek-kbd">Ctrl+Space</kbd>
-                  <span className="peek-form-hint">or</span>
-                  <kbd className="peek-kbd">Alt+Space</kbd>
-                </span>
-              </div>
+              <HotkeyRecorder />
 
               <div className="peek-settings-divider" />
 

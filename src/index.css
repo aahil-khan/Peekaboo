@@ -1892,6 +1892,48 @@ html[data-window='peek'] {
   background: var(--peek-border);
 }
 
+/* Summon hotkey recorder: a key cap that becomes an input when armed. */
+.peek-hotkey-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  flex-shrink: 0;
+}
+
+.peek-hotkey-recorder {
+  min-width: 120px;
+  padding: 5px 10px;
+  border: 1px solid var(--peek-border);
+  border-radius: var(--peek-radius-sm);
+  background: var(--peek-kbd-bg);
+  color: var(--peek-text);
+  font-family: var(--peek-font);
+  font-size: var(--peek-text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.peek-hotkey-recorder:hover:not(:disabled) {
+  border-color: var(--peek-text-muted);
+}
+
+.peek-hotkey-recorder:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: 2px;
+}
+
+.peek-hotkey-recorder[data-recording='true'] {
+  border-color: var(--peek-accent);
+  color: var(--peek-accent);
+  font-weight: 400;
+}
+
+.peek-hotkey-recorder:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Segmented control (theme mode, retention). */
 .peek-segmented {
   display: inline-flex;
@@ -2505,6 +2547,26 @@ html[data-window='peek'] {
   padding: 3px 6px;
   height: auto;
   background: var(--peek-surface-2);
+}
+
+/* A legend row that is also the action (Quit): same look, plus hover and focus. */
+.peek-legend-row--action {
+  width: 100%;
+  border: none;
+  border-radius: var(--peek-radius-xs);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.peek-legend-row--action:hover {
+  background: var(--peek-hover);
+}
+
+.peek-legend-row--action:focus-visible {
+  outline: 2px solid var(--peek-accent);
+  outline-offset: -2px;
 }
 
 /* ═══ Model List ════════════════════════════════════════════════════════ */
