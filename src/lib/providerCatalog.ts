@@ -119,7 +119,7 @@ export async function verifyProvider(id: string): Promise<VerifyResult> {
     let available: boolean;
     switch (id) {
       case 'ollama':
-        available = await new OllamaProvider(s.ollamaBaseUrl).isAvailable();
+        available = await new OllamaProvider(s.ollamaBaseUrl, s.ollamaKeepAlive).isAvailable();
         break;
       case 'openai':
         available = await new OpenAIProvider(s.openaiBaseUrl, s.openaiApiKey).isAvailable();
@@ -148,7 +148,7 @@ export async function listProviderModels(id: string) {
   const s = useSettingsStore.getState();
   switch (id) {
     case 'ollama':
-      return new OllamaProvider(s.ollamaBaseUrl).models();
+      return new OllamaProvider(s.ollamaBaseUrl, s.ollamaKeepAlive).models();
     case 'openai':
       return new OpenAIProvider(s.openaiBaseUrl, s.openaiApiKey).models();
     case 'anthropic':

@@ -11,7 +11,7 @@ import { ModelPluginProvider } from '../providers/plugin';
 import { ModelInfo, Provider } from '../providers/types';
 
 export const Models: React.FC = () => {
-  const { activeModel, setActiveModel, isModelsOpen, setModelsOpen, activeProvider, ollamaBaseUrl, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey } = useSettingsStore();
+  const { activeModel, setActiveModel, isModelsOpen, setModelsOpen, activeProvider, ollamaBaseUrl, ollamaKeepAlive, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey } = useSettingsStore();
   const [availableModels, setAvailableModels] = React.useState<ModelInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const [searchQuery, setSearchQuery] = React.useState('');
@@ -29,7 +29,7 @@ export const Models: React.FC = () => {
       let provider: Provider;
       switch (activeProvider) {
         case 'llama': provider = new LlamaProvider(llamaBaseUrl); break;
-        case 'ollama': provider = new OllamaProvider(ollamaBaseUrl); break;
+        case 'ollama': provider = new OllamaProvider(ollamaBaseUrl, ollamaKeepAlive); break;
         case 'openai': provider = new OpenAIProvider(openaiBaseUrl, openaiApiKey); break;
         case 'anthropic': provider = new AnthropicProvider(anthropicApiKey); break;
         case 'gemini': provider = new GeminiProvider(geminiApiKey); break;
@@ -37,7 +37,7 @@ export const Models: React.FC = () => {
       }
       provider.models().then(setAvailableModels);
     }
-  }, [isModelsOpen, activeProvider, ollamaBaseUrl, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey]);
+  }, [isModelsOpen, activeProvider, ollamaBaseUrl, ollamaKeepAlive, llamaBaseUrl, openaiApiKey, openaiBaseUrl, anthropicApiKey, geminiApiKey]);
 
   // Reset selection when opened
   React.useEffect(() => {
