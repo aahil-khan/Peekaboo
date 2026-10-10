@@ -1,24 +1,20 @@
 import type { Provider, Message, ModelInfo } from './types';
+import { httpFetch, httpOk, readLines, apiError, errorMessageOf } from './http';
 
 const DEFAULT_BASE_URL = 'http://localhost:11434';
-// Helper to route requests through Tauri's native Rust fetch client,
-// bypassing WebKitGTK CORS and mixed-content restrictions in production.
-async function secureFetch(input: string | URL, init?: any): Promise<Response> {
-  let urlStr = input.toString();
-  // Force IPv4 loopback to avoid reqwest IPv6 "Connection refused" issues on Linux
-  urlStr = urlStr.replace('http://localhost', 'http://127.0.0.1');
+// Ollama's own default. The model stays in memory this long after an answer,
+// so a follow-up question does not pay for loading it again.
+export const DEFAULT_OLLAMA_KEEP_ALIVE = '5m';
 
-  try {
-    const { fetch: tauriFetch } = await import('@tauri-apps/plugin-http');
-    const tauriInit = { ...init };
-    if (tauriInit.signal) {
-      delete tauriInit.signal;
-      tauriInit.connectTimeout = 2000;
-    }
-    return await tauriFetch(urlStr, tauriInit);
-  } catch {
-    return await window.fetch(input, init);
-  }
+/**
+ * The stored setting as Ollama's `keep_alive` expects it. Durations go as
+ * strings ("5m"), but the two special values must be numbers: Ollama parses a
+ * string as a Go duration, and "-1" has no unit, so it is rejected.
+ */
+export function ollamaKeepAliveParam(value: string): string | number {
+  const trimmed = value.trim();
+  if (!trimmed) return DEFAULT_OLLAMA_KEEP_ALIVE;
+  return /^-?\d+$/.test(trimmed) ? Number(trimmed) : trimmed;
 }
 
 // Per-model metadata cache: survives the lifetime of the app instance
@@ -32,9 +28,11 @@ export class OllamaProvider implements Provider {
   id = 'ollama';
   name = 'Ollama';
   private baseUrl: string;
+  private keepAlive: string;
 
-  constructor(baseUrl: string = DEFAULT_BASE_URL) {
-    this.baseUrl = baseUrl;
+  constructor(baseUrl: string = DEFAULT_BASE_URL, keepAlive: string = DEFAULT_OLLAMA_KEEP_ALIVE) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+    this.keepAlive = keepAlive;
   }
 
   async *stream(
@@ -67,71 +65,37 @@ export class OllamaProvider implements Provider {
       };
     });
 
-    const res = await secureFetch(`${this.baseUrl}/api/chat`, {
+    const res = await httpFetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal,
-      body: JSON.stringify({ model, messages: mappedMessages, stream: true, keep_alive: "5s" }),
+      body: JSON.stringify({
+        model,
+        messages: mappedMessages,
+        stream: true,
+        keep_alive: ollamaKeepAliveParam(this.keepAlive),
+      }),
     });
 
-    if (signal?.aborted) {
-      throw new DOMException('Aborted by user', 'AbortError');
-    }
-
     if (!res.ok) {
-      throw new Error(`Ollama error: ${res.status} ${res.statusText}`);
+      throw await apiError('Ollama', res);
     }
 
-    const reader = res.body!.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        reader.cancel().catch(() => {});
-      });
-    }
-
-    while (true) {
-      if (signal?.aborted) {
-        throw new DOMException('Aborted by user', 'AbortError');
-      }
-
-      const { done, value } = await reader.read();
-
-      if (signal?.aborted) {
-        throw new DOMException('Aborted by user', 'AbortError');
-      }
-
-      if (done) break;
-
-      // Accumulate buffer to handle partial JSON lines across chunks
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      // Keep the last potentially incomplete line in the buffer
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed) continue;
-        try {
-          const json = JSON.parse(trimmed);
-          yield json.message?.content ?? '';
-        } catch {
-          // Skip malformed lines — can happen during high-speed streaming
-          console.warn('Peekaboo: skipped malformed Ollama chunk:', trimmed);
-        }
-      }
-    }
-
-    // Process any remaining buffer
-    if (buffer.trim()) {
+    for await (const line of readLines(res, signal)) {
+      let json: any;
       try {
-        const json = JSON.parse(buffer.trim());
-        yield json.message?.content ?? '';
+        json = JSON.parse(line);
       } catch {
-        // Final incomplete chunk — ignore
+        // Skip malformed lines — can happen during high-speed streaming
+        console.warn('Peekaboo: skipped malformed Ollama chunk:', line);
+        continue;
       }
+      // Ollama reports a failure after the stream has started (the model
+      // crashing, running out of memory) as a line of its own.
+      const failure = errorMessageOf(json);
+      if (failure) throw new Error(`Ollama error: ${failure}`);
+      const content = json.message?.content;
+      if (content) yield content;
     }
   }
 
@@ -143,10 +107,10 @@ export class OllamaProvider implements Provider {
     }
 
     try {
-      const res = await secureFetch(`${this.baseUrl}/api/tags`);
+      const res = await httpFetch(`${this.baseUrl}/api/tags`);
       if (!res.ok) return [];
       const data = await res.json();
-      
+
       const result = await Promise.all(
         (data.models || []).map(async (m: any) => {
           if (metadataCache.has(m.name)) {
@@ -159,7 +123,7 @@ export class OllamaProvider implements Provider {
           const quantization = m.details?.quantization_level;
 
           try {
-            const showRes = await secureFetch(`${this.baseUrl}/api/show`, {
+            const showRes = await httpFetch(`${this.baseUrl}/api/show`, {
               method: 'POST',
               body: JSON.stringify({ name: m.name }),
               headers: { 'Content-Type': 'application/json' },
@@ -195,10 +159,10 @@ export class OllamaProvider implements Provider {
 
   async isAvailable(): Promise<boolean> {
     try {
-      const res = await secureFetch(`${this.baseUrl}/api/tags`, {
+      return await httpOk(`${this.baseUrl}/api/tags`, {
         signal: AbortSignal.timeout(2000),
+        connectTimeout: 2000,
       });
-      return res.ok;
     } catch {
       return false;
     }

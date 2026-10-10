@@ -37,6 +37,8 @@ interface SettingsState {
   activeProvider: string;
   activeModel: string;
   ollamaBaseUrl: string;
+  /** Ollama `keep_alive`: a duration ("5m"), "0" to unload at once, "-1" to never unload. */
+  ollamaKeepAlive: string;
   llamaBaseUrl: string;
   llamaProfiles: LlamaProfile[];
   activeLlamaProfileId: string | null;
@@ -66,6 +68,7 @@ interface SettingsState {
   setActiveProvider: (v: string) => void;
   setActiveModel: (v: string) => void;
   setOllamaBaseUrl: (v: string) => void;
+  setOllamaKeepAlive: (v: string) => void;
   setLlamaBaseUrl: (v: string) => void;
   setOpenaiApiKey: (v: string) => void;
   setOpenaiBaseUrl: (v: string) => void;
@@ -87,6 +90,9 @@ export const useSettingsStore = create<SettingsState>()(
       activeProvider: 'ollama',
       activeModel: '',
       ollamaBaseUrl: 'http://localhost:11434',
+      // Ollama's own default. Anything shorter makes the next question wait
+      // for the model to load again.
+      ollamaKeepAlive: '5m',
       llamaBaseUrl: 'http://127.0.0.1:8080',
       llamaProfiles: [],
       activeLlamaProfileId: null,
@@ -116,6 +122,7 @@ export const useSettingsStore = create<SettingsState>()(
       setActiveProvider: (v) => set({ activeProvider: v }),
       setActiveModel: (v) => set({ activeModel: v }),
       setOllamaBaseUrl: (v) => set({ ollamaBaseUrl: v }),
+      setOllamaKeepAlive: (v) => set({ ollamaKeepAlive: v }),
       setLlamaBaseUrl: (v) => set({ llamaBaseUrl: v }),
       setOpenaiApiKey: (v) => set({ openaiApiKey: v }),
       setOpenaiBaseUrl: (v) => set({ openaiBaseUrl: v }),
