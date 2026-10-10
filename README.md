@@ -101,7 +101,7 @@ On first run, a setup window walks you through picking a backend.
 
 The hotkey is saved in `hotkey.json` in the app's config directory (`~/.config/com.peekaboo.app/` on Linux), separately from the other settings, because it is registered before the UI loads. Delete the file to go back to the default.
 
-If your desktop will not let Peekaboo grab the hotkey, bind the `peekaboo-app` command to any key in your desktop's own keyboard settings instead: launching the binary while it is already running toggles the overlay.
+On Wayland, or anywhere else the hotkey does not fire, bind the `peekaboo-app` command to any key in your desktop's own keyboard settings instead: launching the binary while it is already running toggles the overlay.
 
 ---
 
@@ -153,7 +153,7 @@ Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities 
 
 | Capability | Status |
 | --- | --- |
-| Global shortcuts | X11, and GNOME Wayland (Mutter honours the XWayland grab). **Does not fire on KDE Wayland, Sway or Hyprland**, where the underlying `global-hotkey` crate has no backend; use your desktop's keyboard settings to bind the `peekaboo-app` command (see Keyboard shortcuts) until the planned portal-based implementation lands. |
+| Global shortcuts | Reliable on X11. **Not reliable on Wayland** (GNOME, KDE, Sway, Hyprland): the underlying `global-hotkey` crate only has an X11 backend, and an X11 key grab generally fires only while an XWayland window has focus. On Wayland, bind the `peekaboo-app` command in your desktop's keyboard settings (see Keyboard shortcuts) until the planned portal-based implementation lands. |
 | Primary selection capture | Works (Wayland via `wl-paste`, X11 via `xclip`) |
 | Screen region capture | Works via `xdg-desktop-portal`. GNOME's private screenshot API is denied to unwhitelisted callers on GNOME 50, so the portal is the only path — it prompts once, then remembers. |
 | Active window / app detection | **Not available on GNOME Wayland.** `org.gnome.Shell.Introspect.GetWindows` is whitelist-gated and there is no portal equivalent. Would require a GNOME Shell extension. |
