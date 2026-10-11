@@ -220,7 +220,12 @@ export const ActionsPalette: React.FC<ActionsPaletteProps> = ({
                     aria-selected={runnable && idx === selectedIndex}
                     disabled={!runnable}
                     className="peek-slash-item peek-actions-item"
-                    onMouseEnter={() => setSelectedIndex(idx)}
+                    // mousemove, not mouseenter: WebKit fires mouseenter on a
+                    // row that re-renders under a resting pointer, which made
+                    // the arrow keys lose to wherever the mouse happened to be.
+                    onMouseMove={() => {
+                      if (idx !== selectedIndex) setSelectedIndex(idx);
+                    }}
                     onClick={() => {
                       if (source) onRun(action, source);
                     }}
