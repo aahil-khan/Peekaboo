@@ -35,9 +35,11 @@ test('showing the overlay renders the input and the footer', withApp({ settings:
 test('the overlay window keeps one size while its content grows and shrinks', withApp({ settings: seededSettings() }, async (app, t) => {
   await app.showOverlay();
   await app.waitFor('return !document.querySelector(".peek-footer-statustext")', { what: 'the footer to settle' });
+  // Layout sizes, not getBoundingClientRect: the surface scales in and out
+  // as it appears, and a rect measured mid-animation is a few percent small.
   const measure = () => app.exec(
-    `const surface = document.querySelector(".peek-surface").getBoundingClientRect();
-     return { windowHeight: innerHeight, windowWidth: innerWidth, surfaceHeight: Math.round(surface.height), surfaceBottom: Math.round(surface.bottom) };`,
+    `const surface = document.querySelector(".peek-surface");
+     return { windowHeight: innerHeight, windowWidth: innerWidth, surfaceHeight: surface.offsetHeight, surfaceBottom: surface.offsetTop + surface.offsetHeight };`,
   );
 
   const empty = await measure();
@@ -65,12 +67,14 @@ test('a press on the empty part of the window dismisses the overlay', withApp({ 
   // A press inside the surface is ordinary use and must not dismiss.
   await app.exec('document.querySelector(".peek-surface textarea").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))');
   await sleep(300);
-  assert.equal(await app.exec('return !!document.querySelector(".peek-surface")'), true, 'a press inside the surface leaves the overlay open');
+  assert.equal(await app.exec('return document.visibilityState'), 'visible', 'a press inside the surface leaves the overlay open');
 
   // Below the surface the window is transparent but still there. A press on
   // it is the click-away the user meant.
   await app.exec('document.documentElement.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))');
-  await app.waitFor('return !document.querySelector(".peek-surface")', { what: 'the overlay to be dismissed' });
+  // Not "until .peek-surface is gone": a hidden webview gets no animation
+  // frames, so the exit animation never finishes and the element lingers.
+  await app.waitFor('return document.visibilityState === "hidden"', { what: 'the overlay window to hide' });
 }));
 
 test('asking a question streams the mock answer into the transcript', withApp({
