@@ -1,7 +1,0 @@
-api_version = 1
-
-[plugin]
-id = "selection-capture"
-name = "Auto Capture Selection"
-version = "1.0.0"
-type = "input"

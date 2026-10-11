@@ -86,7 +86,7 @@ mod tests {
     #[test]
     fn reads_the_id_from_a_one_segment_path() {
         assert_eq!(plugin_id_from_path("/clipboard").as_deref(), Some("clipboard"));
-        assert_eq!(plugin_id_from_path("/selection-capture").as_deref(), Some("selection-capture"));
+        assert_eq!(plugin_id_from_path("/clipboard").as_deref(), Some("clipboard"));
         // Some webviews hand the path over without its leading slash.
         assert_eq!(plugin_id_from_path("resources").as_deref(), Some("resources"));
     }

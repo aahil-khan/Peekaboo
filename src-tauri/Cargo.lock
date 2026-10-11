@@ -3565,8 +3565,11 @@ dependencies = [
  "arboard",
  "ashpd 0.13.13",
  "base64 0.22.1",
+ "core-foundation 0.10.1",
+ "core-graphics",
  "image",
  "include_dir",
+ "objc2",
  "pdf-extract",
  "rfd",
  "serde",
@@ -3584,6 +3587,8 @@ dependencies = [
  "tokio",
  "toml 0.8.2",
  "url",
+ "windows-sys 0.59.0",
+ "x11rb",
 ]
 
 [[package]]

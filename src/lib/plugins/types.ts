@@ -74,7 +74,8 @@ export interface PluginContext {
   writeClipboard: (text: string) => Promise<void>;
   getActiveWindow: () => Promise<{ title: string; app: string }>;
   captureRegion: () => Promise<string>;
-  typeText: (text: string) => Promise<void>;
+  /** Paste into the previous app; see plugins/README.md for the outcome shape. */
+  typeText: (text: string) => Promise<{ outcome: 'pasted'; method: string } | { outcome: 'copied'; reason: string }>;
   notify: (title: string, body: string) => Promise<void>;
   getSystemInfo: () => Promise<SystemInfo>;
   /** Filename search under $HOME. Hidden paths are never returned. */

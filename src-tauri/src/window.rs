@@ -17,6 +17,10 @@ static POSITIONED: AtomicBool = AtomicBool::new(false);
 #[derive(Default, serde::Deserialize, Clone)]
 pub struct AppSettings {
     pub setup_completed: bool,
+    /// Attach the selected text when the overlay is summoned. `None` means
+    /// the platform default (`platform::capture_info().default_on`).
+    #[serde(default)]
+    pub capture_selection_on_summon: Option<bool>,
 }
 
 pub struct AppState {
@@ -60,6 +64,33 @@ pub fn hide_peek(app: AppHandle) {
         // tauri.conf.json and the resize floor in PeekSurface.tsx.
         let _ = window.set_size(LogicalSize::new(660.0_f64, 86.0_f64));
         let _ = window.hide();
+    }
+}
+
+/// What the summon hotkey (and a second launch) does: capture what the user
+/// has selected while their app still has focus, then show the overlay with
+/// it attached. The capture runs before `show_peek` on purpose; once the
+/// overlay has focus the selection can no longer be read on every platform.
+pub fn summon(app: AppHandle, state: State<'_, AppState>) {
+    let (setup_completed, capture_enabled) = match state.settings.lock() {
+        Ok(lock) => (
+            lock.setup_completed,
+            lock.capture_selection_on_summon.unwrap_or_else(|| crate::platform::capture_info().default_on),
+        ),
+        Err(_) => (true, false),
+    };
+    if !setup_completed {
+        toggle_peek(app, state);
+        return;
+    }
+    if let Some(window) = get_peek_window(&app) {
+        if window.is_visible().unwrap_or(false) {
+            hide_peek(app);
+            return;
+        }
+        let capture = crate::platform::capture_for_summon(capture_enabled);
+        show_peek(app.clone());
+        let _ = app.emit("peek-summon", capture);
     }
 }
 

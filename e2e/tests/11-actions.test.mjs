@@ -47,7 +47,7 @@ async function openPalette(app) {
   );
 }
 
-test('a transform runs from the keyboard and Enter copies the cleaned result', withApp({ settings: seededSettings() }, async (app, t) => {
+test('a transform runs from the keyboard and Enter applies the cleaned result', withApp({ settings: seededSettings() }, async (app, t) => {
   await mock.reset();
   await mock.configure({ tokens: ANSWER_TOKENS, delayMs: 20 });
   await app.showOverlay();
@@ -79,7 +79,7 @@ test('a transform runs from the keyboard and Enter copies the cleaned result', w
   assert.equal(await app.text('.peek-thread-user-bubble'), 'Fix spelling and grammar');
   assert.match(await app.text('.peek-user-context-chip'), /i recieved you're email/);
   assert.equal(await app.exec('return !document.querySelector(".peek-actions")'), true, 'the palette is gone once the action ran');
-  assert.match(await app.text('.peek-footer-statustext'), /Enter copies the result/, 'the footer says what Enter will do');
+  assert.match(await app.text('.peek-footer-statustext'), /Enter pastes the result/, 'the footer says what Enter will do');
   await app.shot('actions-transform-result');
 
   // The model got the rendered template, with the text inside it.
@@ -89,12 +89,19 @@ test('a transform runs from the keyboard and Enter copies the cleaned result', w
   assert.ok(user.content.includes(`<text>\n${TEXT}\n</text>`), 'with the clipboard text in it');
   assert.doesNotMatch(user.content, /<action|<context>/, 'and none of the stored markup');
 
-  // Enter on the empty input applies the result and hides the overlay.
+  // Enter on the empty input applies the result. This overlay was opened by
+  // show_peek, not the hotkey, so there is no window to paste into: the
+  // native side refuses, leaves the result on the clipboard, brings the
+  // overlay back and says so. The hotkey loop is 12-selection-loop.
   assert.equal(await app.exec('return document.querySelector(".peek-surface textarea").value'), '');
   await app.press('Enter', { css: '.peek-surface textarea' });
-  await app.waitFor('return document.visibilityState === "hidden"', { what: 'the overlay to hide after applying' });
+  const toast = await app.waitFor('const el = document.querySelector(".peek-toast"); return el ? el.innerText : null', { what: 'the copied-instead toast' });
+  assert.match(toast, /Copied instead/, 'the overlay says the result was copied rather than pasted');
+  assert.match(toast, /not opened with the hotkey/, 'and why');
+  assert.equal(await app.exec('return document.visibilityState'), 'visible', 'the overlay stays open to show the message');
   const clipboard = await app.invoke('plugin:clipboard-manager|read_text');
   assert.equal(clipboard, CLEANED, 'the clipboard holds the result with the wrapping quotes removed');
+  await app.shot('actions-copied-instead');
 }));
 
 test('a follow-up after an action sends the rendered prompt as history', withApp({ settings: seededSettings() }, async (app, t) => {

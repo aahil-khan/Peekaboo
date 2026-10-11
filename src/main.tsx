@@ -35,10 +35,11 @@ const App: React.FC = () => {
 
     const sync = async () => {
       try {
-        const { setupCompleted } = useSettingsStore.getState();
+        const { setupCompleted, captureSelectionOnSummon } = useSettingsStore.getState();
         await invoke('update_settings', {
           settings: {
             setup_completed: setupCompleted,
+            capture_selection_on_summon: captureSelectionOnSummon,
           }
         });
       } catch (err) {
@@ -52,6 +53,7 @@ const App: React.FC = () => {
       invoke('update_settings', {
         settings: {
           setup_completed: state.setupCompleted,
+          capture_selection_on_summon: state.captureSelectionOnSummon,
         }
       }).catch(err => console.error('Failed to sync settings to Rust:', err));
     });
