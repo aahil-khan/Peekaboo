@@ -94,7 +94,6 @@ pub fn run() {
             window::open_settings,
             window::quit_app,
             window::show_notification,
-            window::resize_peek,
             window::resize_and_center,
             window::read_clipboard_image,
             window::update_settings,

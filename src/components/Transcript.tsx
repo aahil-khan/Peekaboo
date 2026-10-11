@@ -293,12 +293,11 @@ export const Transcript: React.FC<TranscriptProps> = ({
   /*
    * Whether new content should drag the view down with it.
    *
-   * Intent and position are deliberately separate. The window itself resizes
-   * while content streams in (PeekSurface's ResizeObserver -> resize_peek ->
-   * Rust set_size), and clientHeight lags the content by a frame or two. A
-   * position-only heuristic reads that lag as "the user scrolled up" and
-   * abandons auto-scroll mid-answer. So only a real gesture unsticks; position
-   * may only re-arm.
+   * Intent and position are deliberately separate. The scroller's height is
+   * still changing while an answer streams in, so a position-only heuristic
+   * can read one frame of lag as "the user scrolled up" and abandon
+   * auto-scroll mid-answer. So only a real gesture unsticks; position may
+   * only re-arm.
    *
    * A ref rather than state: this changes on every wheel event and must never
    * cause a render.

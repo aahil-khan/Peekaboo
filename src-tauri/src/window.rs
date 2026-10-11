@@ -55,10 +55,6 @@ pub fn show_peek(app: AppHandle) {
 pub fn hide_peek(app: AppHandle) {
     if let Some(window) = get_peek_window(&app) {
         let _ = app.emit("peek-visibility", false);
-        // Reset to the empty-overlay height before hiding so reopening always
-        // starts from the same size. 86 = input 52 + footer 34, the same as
-        // tauri.conf.json and the resize floor in PeekSurface.tsx.
-        let _ = window.set_size(LogicalSize::new(660.0_f64, 86.0_f64));
         let _ = window.hide();
     }
 }
@@ -149,18 +145,6 @@ pub fn show_setup_mode(app: AppHandle) {
 pub fn hide_setup_mode(app: AppHandle) {
     if let Some(window) = app.get_webview_window("setup") {
         let _ = window.hide();
-    }
-}
-
-#[tauri::command]
-pub fn resize_peek(app: AppHandle, width: f64, height: f64) {
-    if let Some(window) = get_peek_window(&app) {
-        if let Ok(pos) = window.outer_position() {
-            let _ = window.set_size(LogicalSize::new(width, height));
-            let _ = window.set_position(pos);
-        } else {
-            let _ = window.set_size(LogicalSize::new(width, height));
-        }
     }
 }
 
