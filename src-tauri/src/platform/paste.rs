@@ -124,13 +124,22 @@ fn prepare(app: &AppHandle, text: String) -> Result<Prepared, String> {
     let at_summon = focus::at_summon();
     let own_pid = std::process::id();
     let mut now = settle_focus(own_pid, Duration::from_millis(500));
-    // X11 without a window manager (and Windows, on occasion) leaves nothing
-    // focused after our window unmaps; give the recorded window its focus
-    // back. Never a different window.
-    if now.is_none() {
+    // A server with no window manager (Xvfb in CI), and X11 generally after
+    // the focused window unmaps, leaves focus on nobody or lingering on our
+    // own overlay. Put it back on the window we were summoned from — never a
+    // different real window, so focus is not stolen — and wait for it to take.
+    let focus_is_ours_or_nobody = |t: &Option<Target>| t.is_none() || t.as_ref().and_then(|w| w.pid) == Some(own_pid);
+    if focus_is_ours_or_nobody(&now) {
         if let Some(Some(target)) = &at_summon {
             focus::restore(target);
-            now = focus::current();
+            let deadline = Instant::now() + Duration::from_millis(250);
+            loop {
+                now = focus::current();
+                if now.as_ref().map(|t| t.id) == Some(target.id) || Instant::now() >= deadline {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
         }
     }
 

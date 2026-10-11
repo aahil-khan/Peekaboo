@@ -117,12 +117,11 @@ impl Display {
         Ok(Some(Target { id: u64::from(client), pid: self.pid_of(client), title: self.title_of(client) }))
     }
 
-    /// Put focus back on `target` when nothing has it (focus reverted to
-    /// the root after the overlay unmapped). Never steals it from another window.
+    /// Force keyboard focus onto `target`. The caller only asks for this when
+    /// focus is nobody's or still our own overlay's (a server with no window
+    /// manager does not hand it back on its own), never when another real
+    /// window holds it, so this does not steal focus.
     pub fn refocus(&self, target: &Target) -> Result<(), String> {
-        if self.focused()?.is_some() {
-            return Ok(());
-        }
         let window = target.id as Window;
         let attrs = self.conn.get_window_attributes(window).map_err(|e| e.to_string())?.reply().map_err(|e| e.to_string())?;
         if attrs.map_state != MapState::VIEWABLE {
