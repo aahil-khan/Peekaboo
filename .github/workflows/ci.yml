@@ -89,3 +89,55 @@ jobs:
       # is deliberately left out.
       - name: Debug build without bundling
         run: npx tauri build --debug --no-bundle
+
+  e2e:
+    name: End-to-end (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      # webkit2gtk-driver is WebKitWebDriver, which launches the app and drives
+      # its real webview. Xvfb is the private display; dbus-daemon the private
+      # session bus. See e2e/README.md.
+      - name: Install Tauri system dependencies and the e2e tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev \
+            webkit2gtk-driver xvfb dbus python3-xlib
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - run: npm ci
+
+      # The harness builds the debug binary itself when it is missing; doing it
+      # as its own step keeps build failures apart from test failures.
+      - name: Debug build without bundling
+        run: npx tauri build --debug --no-bundle
+
+      - name: Run the end-to-end suite
+        env:
+          E2E_DISPLAY: xvfb
+          E2E_SOFTWARE_GL: "1"
+        run: npm run e2e
+
+      - name: Upload screenshots and logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-output
+          path: e2e/out/
+          if-no-files-found: ignore
