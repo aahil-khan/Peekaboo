@@ -90,6 +90,17 @@ async function startXvfb(procs, baseEnv) {
   const child = procs.start('xvfb', 'Xvfb', [display, '-screen', '0', `${MONITOR.width}x${MONITOR.height}x24`, '-nolisten', 'tcp'], { env });
   await waitUntil(() => fileExists(`/tmp/.X11-unix/X${number}`) || child.exitCode !== null, { timeout: 15000, what: 'the Xvfb socket' });
   if (child.exitCode !== null) throw new Error(`Xvfb exited with ${child.exitCode}; see xvfb.log`);
+
+  // Bare Xvfb has no window manager, so when the overlay unmaps nothing hands
+  // keyboard focus back to the window the user was in — focus just vanishes,
+  // which no real desktop does and which breaks paste-back's "is the previous
+  // window still focused?" check. A tiny WM (openbox) reverts focus the way
+  // mutter and every real session do. Optional: without it the display still
+  // works for everything that does not depend on focus returning.
+  const displayEnv = { ...env, DISPLAY: display };
+  if (fileExists('/usr/bin/openbox')) {
+    procs.start('openbox', 'openbox', ['--sm-disable'], { env: displayEnv });
+  }
   return { kind: 'xvfb', env: { DISPLAY: display, GDK_BACKEND: 'x11' } };
 }
 
