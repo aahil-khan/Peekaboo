@@ -127,84 +127,128 @@ test('the Settings recorder changes the hotkey from a key press', withApp({ sett
   await app.shot('hotkey-recorder');
 }));
 
-test('the chord really toggles the overlay with real key events', { skip: display ? false : 'no X11 display on this run' }, withApp({ settings: seededSettings() }, async (app, t) => {
+/*
+ * Real key events. Two ways to inject them:
+ *  - compositor-level: mutter's RemoteDesktop interface feeds the keys into
+ *    its own input path, so they are routed by focus like a physical keyboard
+ *    (Wayland-native window focused: the key goes to it and Xwayland never
+ *    sees it; X11 window focused: Xwayland gets it and the grab can fire);
+ *  - XTest: an X11 request straight into Xwayland, so the grab fires no matter
+ *    what has focus. Says nothing about a real keyboard on Wayland; kept as a
+ *    reference and as the only option on Xvfb, where it is the server's input.
+ *
+ * The case that must hold is the one a GNOME user hits: focus in some other
+ * X11 app, press the chord, Peekaboo appears.
+ */
+
+/** Was a plain key, injected this way, delivered to the focused X11 window? */
+async function deliversToX11(press, win) {
+  const seen = win.events.filter((e) => e.startsWith('keypress')).length;
+  await press();
+  return waitUntil(() => win.events.filter((e) => e.startsWith('keypress')).length > seen, { timeout: 3000, what: 'the X11 window to see a key' }).then(() => true, () => false);
+}
+
+/** Was a plain key, injected this way, delivered to the focused webview? */
+async function deliversToWebview(app, press) {
+  await app.exec('window.__e2eKeys = []; window.addEventListener("keydown", (e) => window.__e2eKeys.push(e.key), true)');
+  await press();
+  return app.waitFor('return window.__e2eKeys.length > 0', { timeout: 3000, what: 'the webview to see a key' }).then(() => true, () => false);
+}
+
+async function chordToggles(app, press) {
   await app.use('peekaboo');
-  assert.equal(await app.exec('return document.visibilityState'), 'hidden');
+  const before = await app.exec('return document.visibilityState');
+  await press();
+  const after = await waitUntil(async () => {
+    const now = await app.exec('return document.visibilityState');
+    return now !== before ? now : null;
+  }, { timeout: 4000, what: 'a visibility change' }).catch(() => before);
+  return { fired: after !== before, before, after };
+}
 
-  // Nothing of the app is focused yet; the grab is on the X root window.
-  t.diagnostic(`key injection: ${injection}`);
-  await pressChord();
-  const shown = await app.waitFor('return document.visibilityState === "visible" && !!document.querySelector(".peek-surface")', { timeout: 5000, what: 'the overlay to appear on the chord' })
-    .then(() => true, () => false);
-  t.diagnostic(`chord with no app window focused: overlay ${shown ? 'appeared' : 'did not appear'}`);
-  assert.ok(shown, 'Ctrl+Alt+Space summons the overlay');
-  await app.shot('hotkey-summoned');
+const METHODS = env.displayKind === 'mutter'
+  ? [
+    ['compositor-level (mutter RemoteDesktop NotifyKeyboardKeycode)', () => compositor(...CHORD_EVDEV), () => compositor('KEY_K')],
+    ['XTest into Xwayland (reference only)', () => xtest(...CHORD_XTEST), () => xtest('k')],
+  ]
+  : [['XTest on Xvfb', () => xtest(...CHORD_XTEST), () => xtest('k')]];
 
-  // Now the overlay (Wayland-native on mutter) has focus. Does the grab still fire?
-  await sleep(500);
-  const focused = await app.exec('return document.hasFocus()');
-  await pressChord();
-  const hidden = await app.waitFor('return document.visibilityState === "hidden"', { timeout: 5000, what: 'the overlay to hide on the chord' })
-    .then(() => true, () => false);
-  t.diagnostic(`chord with the overlay focused (hasFocus=${focused}): overlay ${hidden ? 'hid' : 'stayed up'}`);
-  if (!hidden) await app.hideOverlay();
-}));
-
-test('experiment: does the X11 grab fire with an X11 window focused versus a Wayland-native window focused?', { skip: display ? false : 'no X11 display on this run' }, withApp({ settings: seededSettings() }, async (app, t) => {
-  await app.use('peekaboo');
-  const methods = env.displayKind === 'mutter'
-    ? [['compositor-level (mutter RemoteDesktop NotifyKeyboardKeycode)', () => compositor(...CHORD_EVDEV)], ['XTest into Xwayland (reference only)', () => xtest(...CHORD_XTEST)]]
-    : [['XTest on Xvfb', () => xtest(...CHORD_XTEST)]];
-
-  const toggled = async (press) => {
-    const before = await app.exec('return document.visibilityState');
-    await press();
-    const after = await waitUntil(async () => {
-      const now = await app.exec('return document.visibilityState');
-      return now !== before ? now : null;
-    }, { timeout: 4000, what: 'a visibility change' }).catch(() => before);
-    if (after === 'visible') await app.hideOverlay();
-    return after !== before;
-  };
-
-  const lines = [`display=${display} kind=${env.displayKind}`];
-  for (const [name, press] of methods) {
-    // 1. An X11 window has focus (a bare Xlib window, mapped on the display).
-    const win = xwindow();
+test('the chord summons the overlay from an X11 window, with real key events', { skip: display ? false : 'no X11 display on this run' }, withApp({ settings: seededSettings() }, async (app, t) => {
+  const [name, chord, key] = METHODS[0];
+  t.diagnostic(`key injection: ${name}`);
+  const win = xwindow();
+  try {
     await win.mapped;
     await sleep(700);
-    const x11Focused = win.events.includes('focused');
-    const withX11 = await toggled(press);
+    const delivered = await deliversToX11(key, win);
+    t.diagnostic(`plain key delivered to the focused X11 window: ${delivered}`);
+
+    const summon = await chordToggles(app, chord);
+    t.diagnostic(`X11 window focused: chord ${summon.fired ? 'fired' : 'did not fire'} (${summon.before} -> ${summon.after})`);
+    assert.ok(summon.fired && summon.after === 'visible', 'Ctrl+Alt+Space summons the overlay while an X11 window has focus');
+    await app.shot('hotkey-summoned');
+
+    // Informative: the overlay itself (Wayland-native on mutter) now has focus.
+    await sleep(500);
+    const overlayFocused = await app.exec('return document.hasFocus()');
+    const dismiss = await chordToggles(app, chord);
+    t.diagnostic(`overlay focused (hasFocus=${overlayFocused}): chord ${dismiss.fired ? 'hid it' : 'did not fire'}`);
+    if (!dismiss.fired) await app.hideOverlay();
+  } finally {
     win.close();
+  }
+}));
+
+// One app per injection method: the two leave different modifier state
+// behind in Xwayland, and mixing them in one session muddles the results.
+for (const [name, chord, key] of METHODS) {
+  test(`experiment (${name.split(' ')[0]}): does the X11 grab fire with an X11 window focused versus a Wayland-native window focused?`, { skip: display ? false : 'no X11 display on this run' }, withApp({ settings: seededSettings() }, async (app, t) => {
+    const lines = [`display=${display} kind=${env.displayKind} | injection: ${name}`];
+
+    // Case A: nothing of ours has focus.
+    const a = await chordToggles(app, chord);
+    if (a.after === 'visible') await app.hideOverlay();
+    lines.push(`no window focused | chord ${a.fired ? 'FIRED' : 'did not fire'}`);
+
+    // Case B: an X11 window (bare Xlib, mapped on the display) has focus.
+    const win = xwindow();
+    try {
+      await win.mapped;
+      await sleep(700);
+      const delivered = await deliversToX11(key, win);
+      const b = await chordToggles(app, chord);
+      if (b.after === 'visible') await app.hideOverlay();
+      lines.push(`X11 window focused (FocusIn seen: ${win.events.includes('focused')}, plain key delivered: ${delivered}) | chord ${b.fired ? 'FIRED' : 'did not fire'}`);
+    } finally {
+      win.close();
+    }
     await sleep(500);
 
-    // 2. A Wayland-native window has focus: the app's own Settings window.
+    // Case C: a Wayland-native window: the app's own Settings window. Whether
+    // the headless compositor actually gives it keyboard focus is recorded,
+    // because without that the line says nothing.
+    await app.use('peekaboo');
     await app.invoke('open_settings');
     await app.use('settings');
     await app.waitFor('return document.visibilityState === "visible"', { what: 'the settings window' });
     await sleep(700);
-    const waylandFocused = await app.exec('return document.hasFocus()');
-    await app.use('peekaboo');
-    const withWayland = await toggled(press);
-    await app.use('settings');
-    await app.exec('window.close()').catch(() => {});
-    await app.use('peekaboo');
-    await sleep(300);
+    const focused = await app.exec('return document.hasFocus()');
+    const delivered = await deliversToWebview(app, key);
+    const c = await chordToggles(app, chord);
+    if (c.after === 'visible') await app.hideOverlay();
+    lines.push(`Wayland-native window focused (document.hasFocus: ${focused}, plain key delivered: ${delivered}) | chord ${c.fired ? 'FIRED' : 'did not fire'}`);
 
-    lines.push(`${name}: X11 window focused (FocusIn seen: ${x11Focused}): chord ${withX11 ? 'FIRED' : 'did not fire'}; Wayland-native window focused (document.hasFocus: ${waylandFocused}): chord ${withWayland ? 'FIRED' : 'did not fire'}`);
-  }
+    // How Xwayland was started matters for reading XTest lines: with EI
+    // (-enable-ei-portal) XTest can be forwarded to the compositor; without
+    // it Xwayland handles XTest itself and the compositor never sees it.
+    const xwayland = fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)).map((pid) => {
+      try { return fs.readFileSync(`/proc/${pid}/cmdline`, 'latin1').split('\0').join(' ').trim(); } catch { return ''; }
+    }).find((cmd) => /(^|\/)Xwayland /.test(cmd) && cmd.includes(` ${display} `)) ?? '(not found)';
+    lines.push(`Xwayland: ${xwayland}`);
 
-  // How Xwayland was started matters for reading the XTest line: with an EI
-  // socket XTest is forwarded to the compositor; without one Xwayland handles
-  // it itself and the compositor never sees it.
-  const xwayland = fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)).map((pid) => {
-    try { return fs.readFileSync(`/proc/${pid}/cmdline`, 'latin1').split('\0').join(' ').trim(); } catch { return ''; }
-  }).find((cmd) => /(^|\/)Xwayland /.test(cmd) && cmd.includes(` ${display} `)) ?? '(not found)';
-  lines.push(`Xwayland: ${xwayland}`);
-
-  const report = lines.join('\n');
-  for (const line of lines) t.diagnostic(line);
-  fs.writeFileSync(path.join(env.outDir, 'hotkey-focus-experiment.txt'), report + '\n');
-  // No assertion on purpose: this records behaviour for the open question in
-  // the PR; the test above is the one that must hold.
-}));
+    for (const line of lines) t.diagnostic(line);
+    fs.appendFileSync(path.join(env.outDir, 'hotkey-focus-experiment.txt'), lines.join('\n') + '\n\n');
+    // No assertion on purpose: this records behaviour for the open question in
+    // the PR; the test above is the one that must hold.
+  }));
+}

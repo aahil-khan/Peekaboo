@@ -42,6 +42,9 @@ def main(argv):
     call = lambda path, iface, method, args=None: bus.call_sync(DEST, path, iface, method, args, None, 0, -1, None)
     session = call("/org/gnome/Mutter/RemoteDesktop", DEST, "CreateSession").unpack()[0]
     call(session, IFACE, "Start")
+    # The virtual keyboard appears when the session starts; a key sent in the
+    # same instant is dropped, so give it a moment to exist.
+    time.sleep(0.3)
     try:
         for code in codes:
             call(session, IFACE, "NotifyKeyboardKeycode", GLib.Variant("(ub)", (code, True)))
