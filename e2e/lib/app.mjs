@@ -249,8 +249,13 @@ export class App {
   }
 
   /** Click the element whose aria-label is exactly `label`. */
-  clickLabelled(label) {
-    return this.click(`[aria-label="${label.replace(/"/g, '\\"')}"]`);
+  async clickLabelled(label) {
+    const css = `[aria-label="${label.replace(/"/g, '\\"')}"]`;
+    // A control often renders a beat after the text that announces it (a
+    // memory's row appears, then its pin button). Clicking on sight of the
+    // text raced that, and failed about one CI run in three.
+    await this.waitFor(`return !!document.querySelector(${JSON.stringify(css)})`, { what: `a control labelled "${label}"` });
+    return this.click(css);
   }
 
   // ── The overlay ──
