@@ -209,8 +209,33 @@ export const PeekSurface: React.FC = () => {
 
   // ── Listen for visibility events from Rust ──
   useEffect(() => {
+    /*
+     * A hidden window gets no animation frames, and Rust shows the window and
+     * sends this event in the same breath. Mounting the surface at once would
+     * start its fade-in before the window is on screen, and some or all of it
+     * would be over by the first frame anyone sees. So when the page is still
+     * hidden, wait for it to become visible. The timeout covers a platform
+     * that never reports the change.
+     */
+    let cancelPendingShow: (() => void) | null = null;
     const unlisten1 = listen<boolean>('peek-visibility', (event) => {
-      setVisible(event.payload);
+      cancelPendingShow?.();
+      cancelPendingShow = null;
+      if (!event.payload || document.visibilityState === 'visible') {
+        setVisible(event.payload);
+        return;
+      }
+      const show = () => {
+        cancelPendingShow?.();
+        cancelPendingShow = null;
+        setVisible(true);
+      };
+      const timer = setTimeout(show, 150);
+      document.addEventListener('visibilitychange', show, { once: true });
+      cancelPendingShow = () => {
+        clearTimeout(timer);
+        document.removeEventListener('visibilitychange', show);
+      };
     });
 
     const unlisten2 = listen('peek-focus-lost', () => {
@@ -226,6 +251,7 @@ export const PeekSurface: React.FC = () => {
     });
 
     return () => {
+      cancelPendingShow?.();
       unlisten1.then((fn) => fn());
       unlisten2.then((fn) => fn());
     };
@@ -830,7 +856,9 @@ export const PeekSurface: React.FC = () => {
   }, [setupCompleted]);
 
   return (
-    <AnimatePresence>
+    // Rust keeps the window mapped until the surface has finished fading out
+    // (see hide_peek in window.rs); this is the "it has" that lets it unmap.
+    <AnimatePresence onExitComplete={() => { invoke('finish_hide').catch(console.warn); }}>
       {visible && (
         <motion.div
           className="peek-surface"
