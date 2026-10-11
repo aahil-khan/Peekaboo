@@ -44,11 +44,11 @@
 
   /* Geometry.
    *
-   * The height budget, which four places must agree on:
+   * The height budget, which three places must agree on:
    *   input 52 + footer 34 + transcript 396 + attachments ~34 = 516
-   * against .peek-surface's max-height of 518 and the 520 clamp in
-   * PeekSurface.tsx's ResizeObserver. The empty overlay is 52 + 34 = 86,
-   * which is also tauri.conf.json's window height and the clamp's floor.
+   * against .peek-surface's max-height of 518 and the overlay window's fixed
+   * height of 520 in tauri.conf.json. The window never resizes; the surface
+   * grows and shrinks inside it (see the note in PeekSurface.tsx).
    *
    * If the transcript cap exceeds this budget it does not simply overflow:
    * .peek-surface is overflow:hidden, so the content clips instead of
@@ -801,18 +801,26 @@ html[data-window='peek'] {
 
 /* ═══ Peek Surface ══════════════════════════════════════════════════════ */
 
+/*
+ * No box-shadow and no backdrop-filter, on purpose.
+ *
+ * The surface is exactly as wide as its window, so a shadow could only ever
+ * show as a strip under the bottom edge, cut off square at both sides. And a
+ * backdrop-filter blurs what the page has painted behind the element, which
+ * in a transparent window is nothing: it cannot see the desktop. Both were
+ * invisible, and both made the compositor redo a 24-40px blur on every frame
+ * the surface moved or grew.
+ */
 .peek-surface {
   display: flex;
   flex-direction: column;
   width: 660px;
-  /* Coupled to --peek-transcript-max and the clamp in PeekSurface.tsx. */
+  /* Coupled to --peek-transcript-max, and 2px inside the window's fixed 520px
+     height in tauri.conf.json. */
   max-height: 518px;
   background: var(--peek-bg);
   border-radius: var(--peek-radius-lg);
-  box-shadow: var(--peek-shadow);
   overflow: hidden;
-  backdrop-filter: var(--peek-backdrop);
-  -webkit-backdrop-filter: var(--peek-backdrop);
   position: relative;
 }
 

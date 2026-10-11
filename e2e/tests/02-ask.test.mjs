@@ -23,21 +23,58 @@ test('showing the overlay renders the input and the footer', withApp({ settings:
   await app.shot('overlay-input-and-footer');
 }));
 
-// The window is sized to its content by the overlay's ResizeObserver (floor
-// 86 px: input plus footer). A taller window is invisible on a desktop, being
-// transparent, but it still covers whatever is under it. Reproduction of bug
-// 3 in the harness PR.
-test('the overlay window is no taller than its content', { todo: 'the overlay window opens taller than its content (harness PR, bug 3)' }, withApp({ settings: seededSettings() }, async (app, t) => {
+/*
+ * The overlay's window is one fixed size and the surface grows and shrinks
+ * inside it. It used to be resized from the page to follow the content, one
+ * IPC call and one compositor resize per frame of every height change, with
+ * the content clipped until the window caught up; that was the stutter in
+ * every panel, palette and streaming answer. These two tests hold the new
+ * arrangement in place: the window must not move while the content does, and
+ * the invisible remainder of the window must not become a dead zone.
+ */
+test('the overlay window keeps one size while its content grows and shrinks', withApp({ settings: seededSettings() }, async (app, t) => {
   await app.showOverlay();
   await app.waitFor('return !document.querySelector(".peek-footer-statustext")', { what: 'the footer to settle' });
-  await sleep(600);
-  const size = await app.exec(
-    `const surface = document.querySelector(".peek-surface").getBoundingClientRect();
-     return { windowHeight: innerHeight, windowWidth: innerWidth, surfaceHeight: Math.round(surface.height), surfaceWidth: Math.round(surface.width) };`,
+  // Layout sizes, not getBoundingClientRect: the surface scales in and out
+  // as it appears, and a rect measured mid-animation is a few percent small.
+  const measure = () => app.exec(
+    `const surface = document.querySelector(".peek-surface");
+     return { windowHeight: innerHeight, windowWidth: innerWidth, surfaceHeight: surface.offsetHeight, surfaceBottom: surface.offsetTop + surface.offsetHeight };`,
   );
-  t.diagnostic(`window ${size.windowWidth}x${size.windowHeight}, surface ${size.surfaceWidth}x${size.surfaceHeight}`);
-  await app.shot('overlay-window-size');
-  assert.ok(size.windowHeight <= size.surfaceHeight + 4, `window height ${size.windowHeight} should match the surface height ${size.surfaceHeight}`);
+
+  const empty = await measure();
+  await app.press('h', { alt: true });
+  await app.waitFor('return !!document.querySelector(".peek-history")', { what: 'the history panel' });
+  await sleep(500);
+  const withPanel = await measure();
+  await app.shot('overlay-window-fixed-size');
+  await app.press('h', { alt: true });
+  await app.waitFor('return !document.querySelector(".peek-history")', { what: 'the panel to close' });
+  await sleep(500);
+  const closed = await measure();
+  t.diagnostic(`window ${empty.windowWidth}x${empty.windowHeight}; surface ${empty.surfaceHeight} -> ${withPanel.surfaceHeight} -> ${closed.surfaceHeight}`);
+
+  assert.ok(withPanel.surfaceHeight > empty.surfaceHeight + 100, 'opening a panel makes the surface taller');
+  assert.equal(closed.surfaceHeight, empty.surfaceHeight, 'and closing it brings the surface back');
+  assert.equal(withPanel.windowHeight, empty.windowHeight, 'the window did not resize when the panel opened');
+  assert.equal(closed.windowHeight, empty.windowHeight, 'nor when it closed');
+  assert.ok(empty.windowHeight >= 518, `the window is tall enough for the tallest surface (it is ${empty.windowHeight})`);
+  assert.ok(withPanel.surfaceBottom <= withPanel.windowHeight, 'the open panel fits inside the window, so nothing is clipped');
+}));
+
+test('a press on the empty part of the window dismisses the overlay', withApp({ settings: seededSettings() }, async (app) => {
+  await app.showOverlay();
+  // A press inside the surface is ordinary use and must not dismiss.
+  await app.exec('document.querySelector(".peek-surface textarea").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))');
+  await sleep(300);
+  assert.equal(await app.exec('return document.visibilityState'), 'visible', 'a press inside the surface leaves the overlay open');
+
+  // Below the surface the window is transparent but still there. A press on
+  // it is the click-away the user meant.
+  await app.exec('document.documentElement.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))');
+  // Not "until .peek-surface is gone": a hidden webview gets no animation
+  // frames, so the exit animation never finishes and the element lingers.
+  await app.waitFor('return document.visibilityState === "hidden"', { what: 'the overlay window to hide' });
 }));
 
 test('asking a question streams the mock answer into the transcript', withApp({
