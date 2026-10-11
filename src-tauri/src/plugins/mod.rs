@@ -7,4 +7,5 @@
 pub mod discovery;
 pub mod files;
 pub mod fs;
+pub mod protocol;
 pub mod sysinfo;

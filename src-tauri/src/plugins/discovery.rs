@@ -138,12 +138,16 @@ fn user_plugin_dir(app: &AppHandle, plugin_id: &str) -> Option<PathBuf> {
     None
 }
 
-#[tauri::command]
-pub fn get_plugin_js(app: AppHandle, plugin_id: String) -> Result<String, String> {
+/// The JavaScript for one plugin, by manifest id.
+///
+/// The id is only ever compared against manifest ids, never joined onto a
+/// path, so a hostile id can name a plugin that does not exist and nothing
+/// else.
+pub fn plugin_js(app: &AppHandle, plugin_id: &str) -> Result<String, String> {
     // User directory first. An override has to win here as well as in
     // discovery, or a customised plugin would show its own manifest while
     // running the built-in's code.
-    if let Some(dir) = user_plugin_dir(&app, &plugin_id) {
+    if let Some(dir) = user_plugin_dir(app, plugin_id) {
         for candidate in [dir.join("dist").join("index.js"), dir.join("index.js")] {
             if candidate.exists() {
                 return std::fs::read_to_string(&candidate)
@@ -165,7 +169,7 @@ pub fn get_plugin_js(app: AppHandle, plugin_id: String) -> Result<String, String
         let Ok(value) = toml::from_str::<Value>(text) else {
             continue;
         };
-        if manifest_id(&value).as_deref() != Some(plugin_id.as_str()) {
+        if manifest_id(&value).as_deref() != Some(plugin_id) {
             continue;
         }
         return dir
@@ -176,6 +180,17 @@ pub fn get_plugin_js(app: AppHandle, plugin_id: String) -> Result<String, String
     }
 
     Err(format!("Plugin {plugin_id} not found"))
+}
+
+/// Why a plugin's code cannot be served, if it cannot.
+///
+/// The webview loads plugin code with `import()` (see `protocol.rs`), which
+/// reports every failure as the same opaque error. The loader calls this after
+/// a failed import to find out whether the file was the problem, so Settings
+/// can show a reason a plugin author can act on.
+#[tauri::command]
+pub fn check_plugin_js(app: AppHandle, plugin_id: String) -> Result<(), String> {
+    plugin_js(&app, &plugin_id).map(|_| ())
 }
 
 #[cfg(test)]

@@ -4,17 +4,16 @@ import { withApp, seededSettings, mock } from '../lib/app.mjs';
 
 /*
  * Built-in plugins in the real webview. They are compiled into the binary,
- * discovered over IPC, and loaded as data: URL modules; none of that runs in
- * vitest.
+ * discovered over IPC, and imported as ES modules from the app's
+ * `peekaboo-plugin:` scheme; none of that runs in vitest.
  *
- * Discovery works. Loading does not: the app's Content Security Policy
- * (`default-src 'self'` in tauri.conf.json, no script-src) refuses the
- * `data:` module import the registry uses, so no plugin ever resolves. The
- * two tests below are the bug's reproduction and are marked `todo` until it
- * is fixed; see "Bugs found" in the harness PR.
+ * Loading depends on the Content Security Policy in tauri.conf.json naming
+ * that scheme in script-src. Nothing but these tests would notice a mismatch:
+ * `tauri dev` serves the frontend from Vite, where the policy is not applied.
+ * That is how plugins came to be dead in every built app while working for
+ * everyone who developed them (they were data: URLs then, which the policy
+ * refuses).
  */
-const PLUGIN_LOADING_BUG = 'plugins cannot load: the CSP blocks data: module imports (harness PR, bug 1)';
-
 
 test('"/" lists the built-in context commands', withApp({ settings: seededSettings() }, async (app) => {
   await app.showOverlay();
@@ -30,15 +29,19 @@ test('"/" lists the built-in context commands', withApp({ settings: seededSettin
   await app.shot('plugins-slash-menu');
 }));
 
-test('/resources resolves to an attachment and the attachment reaches the model', { todo: PLUGIN_LOADING_BUG }, withApp({ settings: seededSettings() }, async (app) => {
-  // Evidence for the write-up: the violation the browser reports.
+test('/resources resolves to an attachment and the attachment reaches the model', withApp({ settings: seededSettings() }, async (app) => {
+  // The fix must not have been "allow data: scripts": the policy should still
+  // refuse a script the page is handed as a string.
   const violations = await app.session.execAsync(
     `const done = arguments[0]; const out = [];
      window.addEventListener("securitypolicyviolation", (e) => out.push(e.violatedDirective + " blocked " + e.blockedURI));
      import("data:text/javascript;base64," + btoa("export default 1")).catch(() => {});
      setTimeout(() => done(out), 500);`,
   );
-  if (violations.length) console.log(`# CSP violation on a data: import: ${violations.join('; ')}`);
+  assert.ok(violations.some((v) => v.includes('script-src')), `a data: module import is still refused by the CSP (saw ${JSON.stringify(violations)})`);
+  // Naming script-src explicitly must not have cost the page its own inline
+  // bootstrap script, which is what stamps the window kind before first paint.
+  assert.equal(await app.exec('return document.documentElement.dataset.window'), 'peek', 'the inline bootstrap script in index.html still runs');
 
   await mock.reset();
   await app.showOverlay();
@@ -68,7 +71,7 @@ test('/resources resolves to an attachment and the attachment reaches the model'
   assert.match(user.content, /how busy is this machine\?/, 'along with the question');
 }));
 
-test('/clipboard previews what the clipboard holds', { todo: PLUGIN_LOADING_BUG }, withApp({ settings: seededSettings() }, async (app) => {
+test('/clipboard previews what the clipboard holds', withApp({ settings: seededSettings() }, async (app) => {
   await app.showOverlay();
   await app.type('.peek-surface textarea', '/');
   await app.waitFor('return document.querySelectorAll(".peek-slash-item-title").length > 0', { what: 'the slash menu' });

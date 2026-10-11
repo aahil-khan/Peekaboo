@@ -36,6 +36,9 @@ pub fn run() {
         .manage(llama::LlamaServer {
             child: std::sync::Mutex::new(None),
         })
+        // Plugin code reaches the webview through this scheme and nothing else;
+        // see plugins/protocol.rs for why it is not a data: URL.
+        .register_uri_scheme_protocol(plugins::protocol::SCHEME, plugins::protocol::handle)
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let state = app.state::<window::AppState>();
@@ -104,7 +107,7 @@ pub fn run() {
             hotkey::get_hotkey,
             hotkey::set_hotkey,
             plugins::discovery::discover_plugins,
-            plugins::discovery::get_plugin_js,
+            plugins::discovery::check_plugin_js,
             plugins::fs::plugin_read_file,
             plugins::fs::plugin_write_file,
             plugins::files::plugin_search_files,
