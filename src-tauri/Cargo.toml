@@ -46,6 +46,30 @@ pdf-extract = "0.12"
 ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "remote_desktop", "screencast"] }
 url = "2"
 tokio = { version = "1", features = ["time", "rt-multi-thread", "macros"] }
+# Paste-back on X11 (and into Xwayland apps): XTest key events plus the input
+# focus check that makes them safe. Already in the tree through arboard; this
+# only switches on the extension.
+x11rb = { version = "0.13", features = ["xtest"] }
+
+# Selection capture (synthesised Ctrl+C) and paste-back (SendInput) on Windows,
+# with the raw clipboard API so every format survives the save and restore.
+# Already in the tree through arboard and Tauri.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_System_Ole",
+] }
+
+# Selection capture (Accessibility API) and paste-back (CGEvent) on macOS.
+# All already in the tree through Tauri and arboard.
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-graphics = "0.25"
+objc2 = "0.6"
 
 [profile.release]
 opt-level = 3

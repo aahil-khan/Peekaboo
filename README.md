@@ -50,7 +50,7 @@ Peekaboo takes a different shape:
 - Paste an image straight into the prompt
 - `Alt+S` captures a screen region into the conversation (via xdg-desktop-portal)
 - `/` opens context plugin commands to pull in structured context
-- Text selection capture via an input plugin
+- The selected text is attached when you summon Peekaboo (Linux), and Enter pastes an action's result back into the app
 
 **Context out**
 - `Alt+C` copies the last answer to the clipboard
@@ -175,10 +175,10 @@ Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities 
 | Capability | Status |
 | --- | --- |
 | Global shortcuts | Reliable on X11. **Not reliable on Wayland** (GNOME, KDE, Sway, Hyprland): the underlying `global-hotkey` crate only has an X11 backend, and an X11 key grab generally fires only while an XWayland window has focus. On Wayland, bind the `peekaboo-app` command in your desktop's keyboard settings (see Keyboard shortcuts) until the planned portal-based implementation lands. |
-| Primary selection capture | Works (Wayland via `wl-paste`, X11 via `xclip`) |
+| Selection capture at summon | Works: primary selection through arboard (Wayland data-control or X11/Xwayland), no external tools. Not implemented on Windows and macOS yet |
+| Paste a result back (Enter) | Works: XTest for X11 apps, RemoteDesktop portal for Wayland-native apps; falls back to "copied, press Ctrl+V" and says why. Windows (`SendInput`) and macOS (`CGEvent`) compile but are untested |
 | Screen region capture | Works via `xdg-desktop-portal`. GNOME's private screenshot API is denied to unwhitelisted callers on GNOME 50, so the portal is the only path — it prompts once, then remembers. |
 | Active window / app detection | **Not available on GNOME Wayland.** `org.gnome.Shell.Introspect.GetWindows` is whitelist-gated and there is no portal equivalent. Would require a GNOME Shell extension. |
-| Typing answers into other apps | Not yet implemented. Feasible on Wayland via the RemoteDesktop portal (no root or `ydotool` needed); tracked for a future release. |
 
 On Windows and macOS, CI builds the whole app and runs the Rust unit tests on every change, but the app has not yet been run on either: screen region capture is Linux-only, and on Windows user-installed plugins and plugin file access do not work yet.
 

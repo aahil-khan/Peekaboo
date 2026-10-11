@@ -17,7 +17,7 @@ import { usePeekStore } from '../store/peek';
 import { useActionsStore, selectVisibleActions } from '../store/actions';
 import { cleanTransformOutput, filterActions, previewText, type Action, type ActionKind } from '../lib/actions';
 import { buildActionMessage, toModelMessage, wasStopped } from '../lib/messageUtils';
-import { applyResult, APPLY_VERB } from '../lib/applyResult';
+import { applyResult, APPLY_VERB, copiedInsteadMessage } from '../lib/applyResult';
 import type { ContentPart } from '../providers/types';
 import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
@@ -111,6 +111,10 @@ export const PeekSurface: React.FC = () => {
   // it isn't in the shot, which fires peek-focus-lost — without this the
   // auto-hide would tear the React tree down and the window would come back empty.
   const capturingRef = useRef(false);
+  // Set while a result is being pasted back. paste_result hides the window
+  // (which fires peek-focus-lost) and shows it again if the paste is refused;
+  // the auto-hide must not run in between.
+  const applyingRef = useRef(false);
   const [isVisionModel, setIsVisionModel] = useState(false);
   const { enabledInputPlugins } = usePluginsStore();
 
@@ -207,6 +211,30 @@ export const PeekSurface: React.FC = () => {
     }
   }, [visible, enabledInputPlugins, addAttachment]);
 
+  // ── The summon: Rust read the selection before showing the overlay ──
+  // One 'selection' attachment at a time: a new summon replaces the previous
+  // unsent one rather than piling up.
+  useEffect(() => {
+    const unlisten = listen<{ selection: string | null; source: string | null; error: string | null }>('peek-summon', (event) => {
+      const { selection, source, error } = event.payload;
+      if (error) {
+        setToast({ type: 'error', text: error });
+        setTimeout(() => setToast(null), 8000);
+      }
+      if (!selection) return;
+      for (const a of attachmentsRef.current) {
+        if (a.type === 'selection') removeAttachment(a.id);
+      }
+      addAttachment({
+        type: 'selection',
+        label: source ? `Selection from ${source}` : 'Selection',
+        content: selection,
+        mediaType: 'text/plain',
+      });
+    });
+    return () => { unlisten.then((fn) => fn()); };
+  }, [addAttachment, removeAttachment]);
+
   // ── Listen for visibility events from Rust ──
   useEffect(() => {
     /*
@@ -243,7 +271,7 @@ export const PeekSurface: React.FC = () => {
       if (!usePeekStore.getState().isStreaming) {
         // Debounce focus-loss to prevent spurious hides caused by Wayland command execution artifacts
         setTimeout(() => {
-          if (!document.hasFocus() && !viewingAttachmentRef.current && !capturingRef.current) {
+          if (!document.hasFocus() && !viewingAttachmentRef.current && !capturingRef.current && !applyingRef.current) {
             invoke('hide_peek').catch(console.warn);
           }
         }, 150);
@@ -299,7 +327,12 @@ export const PeekSurface: React.FC = () => {
       // A result left unapplied when the overlay hid should not be applied by
       // a stray Enter an hour later. A transform that finishes while hidden
       // sets a fresh one after this runs, so Esc-and-come-back still works.
-      usePeekStore.getState().setPendingResult(null);
+      // The exception is paste-back's own hide: it unmaps the window to reach
+      // the previous app, and if it is refused the overlay comes back needing
+      // the result still there, so applyPendingResult owns clearing it then.
+      if (!applyingRef.current) {
+        usePeekStore.getState().setPendingResult(null);
+      }
       usePeekStore.getState().setActionsOpen(false);
     }
     // Showing the overlay is a new start for the palette: text attached on
@@ -314,16 +347,31 @@ export const PeekSurface: React.FC = () => {
   const applyPendingResult = useCallback(async () => {
     const pending = usePeekStore.getState().pendingResult;
     if (!pending) return;
+    applyingRef.current = true;
+    let outcome;
     try {
-      await applyResult(pending.text);
+      outcome = await applyResult(pending.text);
     } catch {
       setToast({ type: 'error', text: 'Clipboard write failed — the result is still here' });
       setTimeout(() => setToast(null), 3000);
       return;
+    } finally {
+      applyingRef.current = false;
     }
+    // Either way the result is on the clipboard now; the copy-on-hide option
+    // must not overwrite it with the raw answer.
     appliedRef.current = true;
-    setPendingResult(null);
-    invoke('hide_peek').catch(console.warn);
+    if (outcome.outcome === 'copied') {
+      // Rust brought the overlay back. Keep the pending result so the footer
+      // still offers Enter (a retry) and say what happened: the result is on
+      // the clipboard, paste it with the platform chord.
+      setToast({ type: 'error', text: copiedInsteadMessage(outcome.reason) });
+      setTimeout(() => setToast(null), 8000);
+    } else {
+      // Pasted: Rust already faded the window out. Drop the result so a later
+      // stray Enter cannot re-apply it.
+      setPendingResult(null);
+    }
   }, [setPendingResult]);
 
   // ── Send one user turn and stream the reply ──
@@ -770,7 +818,7 @@ export const PeekSurface: React.FC = () => {
       return {
         tone: 'ok',
         text: `Enter ${APPLY_VERB} the result and closes`,
-        hint: `Enter ${APPLY_VERB} the result of "${pendingResult.actionName}" to the clipboard and hides Peekaboo. Alt+C copies without closing; typing asks a follow-up.`,
+        hint: `Enter ${APPLY_VERB} the result of "${pendingResult.actionName}" into the app you came from, replacing the selection, and hides Peekaboo. If that is not possible it is copied instead and Peekaboo says why. Alt+C copies without closing; typing asks a follow-up.`,
         onClick: () => { void applyPendingResult(); },
       };
     }

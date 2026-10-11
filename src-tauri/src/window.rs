@@ -47,6 +47,10 @@ fn finish_hide_if_current(app: &AppHandle, generation: u64) {
 #[derive(Default, serde::Deserialize, Clone)]
 pub struct AppSettings {
     pub setup_completed: bool,
+    /// Attach the selected text when the overlay is summoned. `None` means
+    /// the platform default (`platform::capture_info().default_on`).
+    #[serde(default)]
+    pub capture_selection_on_summon: Option<bool>,
 }
 
 pub struct AppState {
@@ -118,6 +122,62 @@ pub fn finish_hide(app: AppHandle) {
     finish_hide_if_current(&app, VISIBILITY_GENERATION.load(Ordering::SeqCst));
 }
 
+/// Whether the overlay counts as up for the summon toggle: mapped and not
+/// already fading out. Mid-fade the window is still mapped but the user has
+/// dismissed it, so the next press means "bring it back", not "hide again".
+/// `summon` and `toggle_peek` share this so the hotkey, a desktop-shortcut
+/// relaunch and the tray all read the same state.
+fn overlay_is_up(window: &WebviewWindow) -> bool {
+    window.is_visible().unwrap_or(false) && !HIDING.load(Ordering::SeqCst)
+}
+
+/// Block until the overlay is actually unmapped after a `hide_peek`, or
+/// `timeout` passes (then force it). Paste-back waits on this: focus has to
+/// be back on the previous app before any key is injected, and unmapping is
+/// the two-step fade, so it is not immediate.
+pub fn wait_until_hidden(app: &AppHandle, timeout: std::time::Duration) {
+    let Some(window) = get_peek_window(app) else { return };
+    let deadline = std::time::Instant::now() + timeout;
+    while window.is_visible().unwrap_or(false) {
+        if std::time::Instant::now() >= deadline {
+            // The page never acknowledged and the fallback has not fired yet;
+            // unmap it ourselves so the paste is not held up.
+            VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
+            HIDING.store(false, Ordering::SeqCst);
+            let _ = window.hide();
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+}
+
+/// What the summon hotkey (and a second launch) does: capture what the user
+/// has selected while their app still has focus, then show the overlay with
+/// it attached. The capture runs before `show_peek` on purpose; once the
+/// overlay has focus the selection can no longer be read on every platform.
+pub fn summon(app: AppHandle, state: State<'_, AppState>) {
+    let (setup_completed, capture_enabled) = match state.settings.lock() {
+        Ok(lock) => (
+            lock.setup_completed,
+            lock.capture_selection_on_summon.unwrap_or_else(|| crate::platform::capture_info().default_on),
+        ),
+        Err(_) => (true, false),
+    };
+    if !setup_completed {
+        toggle_peek(app, state);
+        return;
+    }
+    if let Some(window) = get_peek_window(&app) {
+        if overlay_is_up(&window) {
+            hide_peek(app);
+            return;
+        }
+        let capture = crate::platform::capture_for_summon(capture_enabled);
+        show_peek(app.clone());
+        let _ = app.emit("peek-summon", capture);
+    }
+}
+
 #[tauri::command]
 pub fn toggle_peek(app: AppHandle, state: State<'_, AppState>) {
     let setup_completed = if let Ok(lock) = state.settings.lock() {
@@ -146,9 +206,7 @@ pub fn toggle_peek(app: AppHandle, state: State<'_, AppState>) {
     }
 
     if let Some(window) = get_peek_window(&app) {
-        // Mid-fade the window is still mapped, but the user has already
-        // dismissed it, so the key means "bring it back".
-        if window.is_visible().unwrap_or(false) && !HIDING.load(Ordering::SeqCst) {
+        if overlay_is_up(&window) {
             hide_peek(app);
         } else {
             show_peek(app);

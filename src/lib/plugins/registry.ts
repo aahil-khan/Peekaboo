@@ -104,7 +104,7 @@ export class PluginRegistry {
       writeClipboard: async (text: string) => writeText(text),
       getActiveWindow: async () => invoke<{ title: string; app: string }>('get_active_window'),
       captureRegion: async () => invoke<string>('capture_region'),
-      typeText: async (text: string) => invoke<void>('type_text', { text }),
+      typeText: async (text: string) => invoke<{ outcome: 'pasted'; method: string } | { outcome: 'copied'; reason: string }>('type_text', { text }),
       notify: async (title: string, body: string) => invoke<void>('show_notification', { title, body }),
       getSystemInfo: async () => invoke<SystemInfo>('plugin_system_info'),
       searchFiles: async (query: string) => invoke<FileMatch[]>('plugin_search_files', { query }),

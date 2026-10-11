@@ -94,7 +94,7 @@ ctx.pluginId            string
 ctx.settings            the [settings] table from your manifest
 ctx.logger              .info / .warn / .error, prefixed with your plugin id
 
-ctx.getSelection()      currently selected text, system-wide
+ctx.getSelection()      the primary selection on Linux; '' elsewhere (no native read yet)
 ctx.getClipboard()      clipboard text
 ctx.writeClipboard(s)
 ctx.getSystemInfo()     { cpu, memory, disks } — measured on call
@@ -104,7 +104,10 @@ ctx.writeFile(path, s)  allowlisted
 ctx.loadFile(path)      { media_type, encoding, content, truncated }
 ctx.captureRegion()     interactive region capture, base64 PNG
 ctx.notify(title, body)
-ctx.typeText(s)         not yet implemented
+ctx.typeText(s)         paste s into the app the user summoned Peekaboo from:
+                        hides the overlay, verifies focus, presses Ctrl+V / Cmd+V,
+                        restores the clipboard. Resolves { outcome: 'pasted' } or
+                        { outcome: 'copied', reason } (s is left on the clipboard)
 ctx.getActiveWindow()   not available on GNOME Wayland — see the README
 ```
 

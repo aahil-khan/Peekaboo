@@ -208,7 +208,6 @@ mod builtin_tests {
             "resources",
             "clipboard",
             "file",
-            "selection-capture",
             "openai-compatible",
         ] {
             assert!(ids.contains(&expected.to_string()), "missing built-in: {expected}\nfound: {ids:?}");

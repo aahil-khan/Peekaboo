@@ -29,9 +29,7 @@ mod window;
 pub fn run() {
     tauri::Builder::default()
         .manage(window::AppState {
-            settings: std::sync::Mutex::new(window::AppSettings {
-                setup_completed: false,
-            }),
+            settings: std::sync::Mutex::new(window::AppSettings::default()),
         })
         .manage(llama::LlamaServer {
             child: std::sync::Mutex::new(None),
@@ -40,9 +38,11 @@ pub fn run() {
         // see plugins/protocol.rs for why it is not a data: URL.
         .register_uri_scheme_protocol(plugins::protocol::SCHEME, plugins::protocol::handle)
         .plugin(tauri_plugin_clipboard_manager::init())
+        // A second launch is how a desktop shortcut summons Peekaboo on
+        // Wayland, so it is a summon, selection capture included.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             let state = app.state::<window::AppState>();
-            window::toggle_peek(app.clone(), state);
+            window::summon(app.clone(), state);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_http::init())
@@ -55,7 +55,7 @@ pub fn run() {
                     use tauri_plugin_global_shortcut::ShortcutState;
                     if event.state == ShortcutState::Pressed {
                         let state = app.state::<window::AppState>();
-                        window::toggle_peek(app.clone(), state);
+                        window::summon(app.clone(), state);
                     }
                 })
                 .build(),
@@ -104,6 +104,8 @@ pub fn run() {
             window::reload_app,
             window::reset_and_show_setup,
             platform::commands::plugin_get_selection,
+            platform::commands::selection_capture_info,
+            platform::commands::paste_result,
             hotkey::get_hotkey,
             hotkey::set_hotkey,
             plugins::discovery::discover_plugins,

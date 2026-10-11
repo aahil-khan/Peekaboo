@@ -48,6 +48,11 @@ interface SettingsState {
   /** Send pinned memories with every question (they leave the machine on cloud providers). */
   includePinnedMemories: boolean;
   autoCopyOnHide: boolean;
+  /**
+   * Attach the selected text when Peekaboo is summoned. `null` follows the
+   * platform default (on where reading the selection has no side effects).
+   */
+  captureSelectionOnSummon: boolean | null;
   /** Palette id from src/lib/themes.ts. */
   themeId: string;
   /** Swap to the palette's light/dark counterpart to match the OS. */
@@ -84,6 +89,7 @@ interface SettingsState {
   setSystemPrompt: (v: string) => void;
   setIncludePinnedMemories: (v: boolean) => void;
   setAutoCopyOnHide: (v: boolean) => void;
+  setCaptureSelectionOnSummon: (v: boolean | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -108,6 +114,7 @@ export const useSettingsStore = create<SettingsState>()(
       // Off by default on purpose: copying on every dismiss would silently
       // destroy whatever the user already had on their clipboard.
       autoCopyOnHide: false,
+      captureSelectionOnSummon: null,
       // The designed default, and what an existing install already looks like.
       // Following the OS is opt-in.
       themeId: DEFAULT_THEME_ID,
@@ -156,6 +163,7 @@ export const useSettingsStore = create<SettingsState>()(
       setSystemPrompt: (v) => set({ systemPrompt: v }),
       setIncludePinnedMemories: (v) => set({ includePinnedMemories: v }),
       setAutoCopyOnHide: (v) => set({ autoCopyOnHide: v }),
+      setCaptureSelectionOnSummon: (v) => set({ captureSelectionOnSummon: v }),
     }),
     {
       name: 'peekaboo-settings',

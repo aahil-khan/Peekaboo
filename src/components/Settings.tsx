@@ -44,6 +44,7 @@ export const Settings: React.FC = () => {
     systemPrompt, setSystemPrompt,
     includePinnedMemories, setIncludePinnedMemories,
     autoCopyOnHide, setAutoCopyOnHide,
+    captureSelectionOnSummon, setCaptureSelectionOnSummon,
     themeId, setThemeId,
     followSystem, setFollowSystem,
     themeAccent, setThemeAccent,
@@ -57,6 +58,15 @@ export const Settings: React.FC = () => {
   } = usePluginsStore();
 
   const [section, setSection] = useState<SectionId>('general');
+  // How this OS reads the selection, from Rust: whether it can at all and
+  // what the default is, so the toggle below tells the truth per platform.
+  const [captureInfo, setCaptureInfo] = useState<{ method: string; available: boolean; defaultOn: boolean } | null>(null);
+  useEffect(() => {
+    invoke<{ method: string; available: boolean; defaultOn: boolean }>('selection_capture_info')
+      .then(setCaptureInfo)
+      .catch(() => setCaptureInfo(null));
+  }, []);
+  const captureOn = captureSelectionOnSummon ?? captureInfo?.defaultOn ?? false;
   const [showAddProfile, setShowAddProfile] = useState(false);
 
   const {
@@ -231,6 +241,29 @@ export const Settings: React.FC = () => {
 
             <div className="peek-settings-card">
               <HotkeyRecorder />
+
+              <div className="peek-settings-divider" />
+
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Attach the selected text when I summon Peekaboo</span>
+                  <span className="peek-settings-desc">
+                    {captureInfo === null
+                      ? 'Reads what you have selected in the app you are in, so actions can run on it.'
+                      : captureInfo.available
+                        ? 'Reads the primary selection the moment you press the hotkey. Nothing is sent to the app and the clipboard is untouched.'
+                        : 'Not available on this platform yet: reading another app\'s selection here needs native work that has not been done. Paste-back still works.'}
+                  </span>
+                </span>
+                <button
+                  className="peek-switch"
+                  role="switch"
+                  aria-checked={captureOn}
+                  aria-label="Attach the selected text when I summon Peekaboo"
+                  disabled={captureInfo !== null && !captureInfo.available}
+                  onClick={() => setCaptureSelectionOnSummon(!captureOn)}
+                />
+              </div>
 
               <div className="peek-settings-divider" />
 
