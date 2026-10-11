@@ -1,6 +1,9 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import type { PluginManifest, RegisteredPlugin, PluginContext, ContextFragment, ModelPluginModule, MenuItem, ContextPluginModule, SystemInfo, FileMatch, LoadedFile } from './types';
+
+/** Must match SCHEME in src-tauri/src/plugins/protocol.rs and script-src in tauri.conf.json. */
+const PLUGIN_SCHEME = 'peekaboo-plugin';
 
 export class PluginRegistry {
   private plugins = new Map<string, RegisteredPlugin>();
@@ -52,13 +55,26 @@ export class PluginRegistry {
     if (p.loaded || p.error) return;
 
     try {
-      const jsCode = await invoke<string>('get_plugin_js', { pluginId: id });
-      
-      // Load as an ESM module by creating a base64 Data URL to prevent WebkitGTK Blob URL crashes
-      const base64 = btoa(unescape(encodeURIComponent(jsCode)));
-      const url = `data:text/javascript;base64,${base64}`;
+      // Plugin code is served by the app over its own URI scheme (see
+      // src-tauri/src/plugins/protocol.rs) and imported as an ES module. It
+      // is not passed through a data: or blob: URL: the Content Security
+      // Policy refuses data: scripts in a built app, and blob: modules crash
+      // WebKitGTK. convertFileSrc spells the URL the way this platform's
+      // webview expects. The query string makes each load a distinct module,
+      // so a plugin edited on disk is picked up by a rediscovery instead of
+      // being answered from the page's module map.
+      const url = `${convertFileSrc(id, PLUGIN_SCHEME)}?v=${Date.now()}`;
 
-      const module = await import(/* @vite-ignore */ url);
+      let module;
+      try {
+        module = await import(/* @vite-ignore */ url);
+      } catch (importError) {
+        // import() reports a missing file, a syntax error and a refused
+        // request identically. Ask the backend whether the file is the
+        // problem, so the message is one a plugin author can act on.
+        await invoke('check_plugin_js', { pluginId: id });
+        throw importError;
+      }
       if (!module?.default || typeof module.default !== 'object') {
         throw new Error('Plugin does not default export a valid object');
       }
