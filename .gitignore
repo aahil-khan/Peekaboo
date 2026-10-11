@@ -29,3 +29,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# End-to-end run output: screenshots and the logs of every process the harness started.
+e2e/out/
