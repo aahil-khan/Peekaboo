@@ -9,7 +9,7 @@ import React, {
 } from 'react';
 import type { Message } from '../providers/types';
 import type { Attachment } from '../hooks/useAttachments';
-import { getTextContent, parseUserContent } from '../lib/messageUtils';
+import { getTextContent, parseUserContent, stripStopMarker, toModelText } from '../lib/messageUtils';
 import { useSettingsStore } from '../store/settings';
 import { usePeekStore } from '../store/peek';
 
@@ -31,14 +31,6 @@ interface TranscriptProps {
   streamingContent: string;
   isStreaming: boolean;
   onClickAttachment?: (att: Attachment) => void;
-}
-
-/** useStream appends this when the user aborts; it shouldn't reach the clipboard. */
-function stripStopMarker(text: string): string {
-  return text
-    .replace(/\n\n\*\(Stopped by user\)\*/i, '')
-    .replace(/^\*\(Stopped by user\)\*$/i, '')
-    .trim();
 }
 
 function CopyButton({ text, label = 'Copy', alignRight = false }: { text: string; label?: string; alignRight?: boolean }) {
@@ -118,7 +110,7 @@ interface ExchangeBlockProps {
  * compare holds.
  */
 const ExchangeBlock = React.memo<ExchangeBlockProps>(function ExchangeBlock({ exchange, isLive, onClickAttachment }) {
-  const { contexts, prompt } = useMemo(() => parseUserContent(exchange.user), [exchange.user]);
+  const { contexts, prompt, action } = useMemo(() => parseUserContent(exchange.user), [exchange.user]);
   const isWaiting = isLive && !exchange.assistant;
   const cleaned = exchange.assistant ? stripStopMarker(exchange.assistant) : '';
 
@@ -187,8 +179,19 @@ const ExchangeBlock = React.memo<ExchangeBlockProps>(function ExchangeBlock({ ex
           </div>
         )}
 
-        <span className="peek-thread-user-bubble">{prompt}</span>
-        <CopyButton text={exchange.user} label="Copy prompt" alignRight />
+        {/* An action shows its name, not the template it expanded to; the
+            chip above carries the text it ran on. */}
+        {action ? (
+          <span className="peek-thread-user-bubble peek-thread-user-bubble--action" title={`Action · ${action.kind === 'transform' ? 'replaces the text' : 'answers'}`}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            {action.name}
+          </span>
+        ) : (
+          <span className="peek-thread-user-bubble">{prompt}</span>
+        )}
+        <CopyButton text={action ? toModelText(exchange.user) : exchange.user} label="Copy prompt" alignRight />
       </div>
 
       {/*

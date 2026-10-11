@@ -4,7 +4,7 @@
 
 **An AI overlay that actually works on Linux, and isn't locked to one vendor's model.**
 
-Hit `Ctrl+Alt+Space` anywhere (`Option+Space` on a Mac, and you can change it in Settings). Ask. Get an answer. It disappears.
+Hit `Ctrl+Alt+Space` anywhere (`Option+Space` on a Mac, and you can change it in Settings). Ask, or pick an action for the text you selected. Get the answer. It disappears.
 
 Peekaboo is a keyboard-summoned overlay — not a window you alt-tab to, not a browser tab you leave pinned. It appears over whatever you're doing, answers, and gets out of the way.
 
@@ -26,6 +26,13 @@ Peekaboo takes a different shape:
 ---
 
 ## Features
+
+**Actions on your text**
+- Select text in any app, summon Peekaboo, and the actions palette is already up: pick one with the arrow keys and Enter, or type to filter
+- Built in: Fix spelling and grammar, Rewrite more clearly, Make shorter, Make more formal, Make friendlier, Translate to English, Add comments to code (these replace the text); Explain, Summarise, Explain this code, Find bugs, Draft a reply (these answer)
+- `Alt+A` opens the palette at any time; with nothing attached it acts on the clipboard and shows you what it is about to use
+- After a replacing action, `Enter` copies the result and closes the overlay, ready to paste over the original. Typing instead asks a follow-up
+- Add your own in Settings → Actions (a name and a prompt with `{{text}}`), and hide the built-ins you never use
 
 **The overlay**
 - Global summon hotkey, registered natively so there's no startup lag. Default `Ctrl+Alt+Space` (`Option+Space` on macOS); record your own in Settings → General
