@@ -216,7 +216,7 @@ export const PeekSurface: React.FC = () => {
     const unlisten2 = listen('peek-focus-lost', () => {
       // Only auto-hide if not streaming (background task takes over)
       if (!usePeekStore.getState().isStreaming) {
-        // Debounce focus-loss to prevent spurious hides caused by Wayland resize/command execution artifacts
+        // Debounce focus-loss to prevent spurious hides caused by Wayland command execution artifacts
         setTimeout(() => {
           if (!document.hasFocus() && !viewingAttachmentRef.current && !capturingRef.current) {
             invoke('hide_peek').catch(console.warn);
@@ -231,47 +231,34 @@ export const PeekSurface: React.FC = () => {
     };
   }, [setVisible, setInput, addAttachment]);
 
-  // ── Dynamic window resize based on content ──
+  /*
+   * The native window does not follow the content.
+   *
+   * It used to: a ResizeObserver sent every change in the surface's height to
+   * Rust, which resized the window to fit. Any animated height change (a panel
+   * opening, an answer streaming in, the actions palette) therefore cost an IPC
+   * round-trip and a compositor resize per frame, and because the window always
+   * trailed the content by a frame or two, the bottom of whatever was growing
+   * was clipped until it caught up. That was the stutter.
+   *
+   * The window is now a fixed 660x520 (tauri.conf.json), transparent, with the
+   * surface at its top, and everything animates inside it. The cost is that
+   * the unused part of the window, though invisible, still sits over whatever
+   * is underneath, so a press there is treated as the click-away it was meant
+   * to be and dismisses the overlay.
+   */
   useEffect(() => {
     if (!visible) return;
-
-    /*
-     * The observer fires on sub-pixel changes, and each call used to cost an
-     * IPC round-trip into Rust's set_size — during streaming that is once per
-     * animation frame, and the window visibly steps as it grows. Round to whole
-     * pixels, skip anything that doesn't actually change the height, and
-     * coalesce bursts into a single frame.
-     */
-    let lastHeight = -1;
-    let frame = 0;
-
-    const resizeObserver = new ResizeObserver((entries) => {
-      const entry = entries[entries.length - 1];
-      if (!entry) return;
-
-      // Floor 86 = input 52 + footer 34, the height of an empty overlay, and
-      // the same value as tauri.conf.json's window height. Ceiling 520 pairs
-      // with .peek-surface's 518px cap and --peek-transcript-max; see the
-      // height-budget note in index.css before changing any of them.
-      const height = Math.min(Math.max(Math.round(entry.contentRect.height) + 2, 86), 520);
-      if (height === lastHeight) return;
-      lastHeight = height;
-
-      if (frame) cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        invoke('resize_peek', { width: 660, height });
-      });
-    });
-
-    if (surfaceRef.current) {
-      resizeObserver.observe(surfaceRef.current);
-    }
-
-    return () => {
-      if (frame) cancelAnimationFrame(frame);
-      resizeObserver.disconnect();
+    const dismissOnOutsidePress = (e: PointerEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest('.peek-surface')) return;
+      // Same exemptions as losing focus: the attachment viewer is modal, and a
+      // screen capture hides the overlay on purpose.
+      if (viewingAttachmentRef.current || capturingRef.current) return;
+      invoke('hide_peek').catch(console.warn);
     };
+    window.addEventListener('pointerdown', dismissOnOutsidePress);
+    return () => window.removeEventListener('pointerdown', dismissOnOutsidePress);
   }, [visible]);
 
   // ── Reset menus on blur/hide ──
