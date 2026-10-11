@@ -13,11 +13,12 @@ interface ShortcutHandlers {
   onCaptureRegion: () => void;
   onCopyLast: () => void;
   onQuit: () => void;
+  onActions: () => void;
 }
 
 export function useShortcuts(handlers: ShortcutHandlers) {
   const { visible } = usePeekStore();
-  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit } = handlers;
+  const { onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit, onActions } = handlers;
 
   useEffect(() => {
     if (!visible) return;
@@ -71,6 +72,10 @@ export function useShortcuts(handlers: ShortcutHandlers) {
           e.preventDefault();
           onCopyLast();
           return;
+        case 'a': // Actions palette: act on the selected or copied text
+          e.preventDefault();
+          onActions();
+          return;
         case 'h':
           e.preventDefault();
           togglePanel('history');
@@ -96,5 +101,5 @@ export function useShortcuts(handlers: ShortcutHandlers) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit]);
+  }, [visible, onSubmit, onClear, onEscape, onStop, onCaptureRegion, onCopyLast, onQuit, onActions]);
 }

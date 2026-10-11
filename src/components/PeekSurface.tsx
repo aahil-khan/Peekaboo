@@ -12,7 +12,13 @@ import { Models } from './Models';
 import { Legend } from './Legend';
 import { MemoryOverlay } from './MemoryOverlay';
 import { Attachments } from './Attachments';
+import { ActionsPalette, type ActionSource } from './ActionsPalette';
 import { usePeekStore } from '../store/peek';
+import { useActionsStore, selectVisibleActions } from '../store/actions';
+import { cleanTransformOutput, filterActions, previewText, type Action, type ActionKind } from '../lib/actions';
+import { buildActionMessage, toModelMessage, wasStopped } from '../lib/messageUtils';
+import { applyResult, APPLY_VERB } from '../lib/applyResult';
+import type { ContentPart } from '../providers/types';
 import { useSettingsStore } from '../store/settings';
 import { useHistoryStore, type Session } from '../store/history';
 import { useStream } from '../hooks/useStream';
@@ -49,6 +55,17 @@ function generateId(): string {
 
 const PROVIDER_CHECK_INTERVAL_MS = 30_000;
 
+/** One user turn, whether typed or produced by an action. */
+interface SendOptions {
+  /** What the transcript shows and history stores. */
+  content: string | ContentPart[];
+  /** Session title and notification text. */
+  title: string;
+  hasAttachments: boolean;
+  /** Set when the turn runs an action, so a transform's result can be offered to Enter. */
+  action?: { kind: ActionKind; name: string; sourceText: string };
+}
+
 export const PeekSurface: React.FC = () => {
   const {
     visible,
@@ -65,6 +82,12 @@ export const PeekSurface: React.FC = () => {
     addBackgroundTask,
     updateBackgroundTask,
     clear,
+    actionsOpen,
+    setActionsOpen,
+    actionsDismissed,
+    setActionsDismissed,
+    pendingResult,
+    setPendingResult,
   } = usePeekStore();
 
   const { 
@@ -260,14 +283,38 @@ export const PeekSurface: React.FC = () => {
       usePeekStore.getState().setMemoryOverlay({ isOpen: false });
       setViewingAttachment(null);
       setHasActiveModalHeight(false);
+      // A result left unapplied when the overlay hid should not be applied by
+      // a stray Enter an hour later. A transform that finishes while hidden
+      // sets a fresh one after this runs, so Esc-and-come-back still works.
+      usePeekStore.getState().setPendingResult(null);
+      usePeekStore.getState().setActionsOpen(false);
     }
+    // Showing the overlay is a new start for the palette: text attached on
+    // this summon should bring it up even if it was dismissed last time.
+    usePeekStore.getState().setActionsDismissed(false);
   }, [visible]);
 
-  // ── Submit query ──
-  const handleSubmit = useCallback(async () => {
-    const query = input.trim();
-    if (!query) return;
-    
+  // ── Apply a finished transform ──
+  // Set when Enter applied a result, so the copy-on-hide option below does
+  // not overwrite the applied text with the raw answer a moment later.
+  const appliedRef = useRef(false);
+  const applyPendingResult = useCallback(async () => {
+    const pending = usePeekStore.getState().pendingResult;
+    if (!pending) return;
+    try {
+      await applyResult(pending.text);
+    } catch {
+      setToast({ type: 'error', text: 'Clipboard write failed — the result is still here' });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+    appliedRef.current = true;
+    setPendingResult(null);
+    invoke('hide_peek').catch(console.warn);
+  }, [setPendingResult]);
+
+  // ── Send one user turn and stream the reply ──
+  const sendMessage = useCallback(async ({ content, title, hasAttachments, action }: SendOptions) => {
     if (!activeModel) {
       setToast({ type: 'error', text: 'No model selected — pick one from the model button' });
       setTimeout(() => setToast(null), 3000);
@@ -278,12 +325,14 @@ export const PeekSurface: React.FC = () => {
     // reappear on every new chat.
     useSettingsStore.getState().setOverlayTourSeen(true);
 
-    const messageContent = buildMessageContent(query);
-    const hasAttachments = attachments.length > 0;
+    const messageContent = content;
     const userMessage = { role: 'user' as const, content: messageContent };
     addMessage(userMessage);
     setInput('');
     clearAttachments();
+    setPendingResult(null);
+    setActionsOpen(false);
+    setActionsDismissed(false);
 
     // Normal LLM Flow
 
@@ -293,7 +342,7 @@ export const PeekSurface: React.FC = () => {
       sessionId = generateId();
       setActiveSessionId(sessionId);
       try {
-        await createSession(sessionId, activeModel, activeProvider, query.slice(0, 80));
+        await createSession(sessionId, activeModel, activeProvider, title.slice(0, 80));
       } catch (err) {
         console.warn('Failed to create session:', err);
       }
@@ -326,7 +375,9 @@ export const PeekSurface: React.FC = () => {
     if (finalSystemPrompt) {
       streamPayload.push({ role: 'system' as const, content: finalSystemPrompt });
     }
-    streamPayload.push(...allMessages);
+    // Action turns are stored as name + template + text and expanded here,
+    // so a session reloaded from history sends the model the same prompt.
+    streamPayload.push(...allMessages.map(toModelMessage));
 
     const onComplete = async (full: string) => {
       const assistantMessage = { role: 'assistant' as const, content: full, model: activeModel };
@@ -337,13 +388,19 @@ export const PeekSurface: React.FC = () => {
         await saveMessage(generateId(), sessionId!, 'assistant', full);
         // Update session title if first exchange
         if (allMessages.length <= 1) {
-          await updateSessionTitle(sessionId!, query.slice(0, 80));
+          await updateSessionTitle(sessionId!, title.slice(0, 80));
         }
         // Refresh history
         const sessions = await getRecentSessions();
         setSessions(sessions);
       } catch (err) {
         console.warn('Failed to save response:', err);
+      }
+
+      // A transform's answer is the thing the user wants; offer it to Enter.
+      // Not when they stopped it: a half-written replacement is not a result.
+      if (action?.kind === 'transform' && !wasStopped(full)) {
+        setPendingResult({ text: cleanTransformOutput(full, action.sourceText), actionName: action.name });
       }
 
       // Check if this was a background task completion
@@ -356,7 +413,7 @@ export const PeekSurface: React.FC = () => {
         updateBackgroundTask(bgTask.id, { status: 'complete', result: full });
         invoke('show_notification', {
           title: 'Peekaboo — Answer Ready',
-          body: query.slice(0, 100),
+          body: title.slice(0, 100),
         });
       }
 
@@ -376,7 +433,6 @@ export const PeekSurface: React.FC = () => {
 
     await runStream(provider, streamPayload, activeModel, onComplete, onError);
   }, [
-    input,
     activeModel,
     activeProvider,
     messages,
@@ -388,10 +444,40 @@ export const PeekSurface: React.FC = () => {
     runStream,
     setSessions,
     updateBackgroundTask,
-    attachments,
-    buildMessageContent,
     clearAttachments,
+    setPendingResult,
+    setActionsOpen,
+    setActionsDismissed,
   ]);
+
+  // ── Submit the typed question ──
+  const handleSubmit = useCallback(async () => {
+    const query = input.trim();
+    if (!query) {
+      // Enter on an empty box after a transform applies its result. Otherwise
+      // an empty box is a no-op, as before.
+      if (pendingResult && !isStreaming) void applyPendingResult();
+      return;
+    }
+    await sendMessage({
+      content: buildMessageContent(query),
+      title: query,
+      hasAttachments: attachments.length > 0,
+    });
+  }, [input, pendingResult, isStreaming, applyPendingResult, sendMessage, buildMessageContent, attachments.length]);
+
+  // ── Run an action from the palette ──
+  const runAction = useCallback(
+    (action: Action, source: ActionSource) => {
+      void sendMessage({
+        content: buildActionMessage({ name: action.name, kind: action.kind, template: action.prompt }, source.text),
+        title: `${action.name}: ${previewText(source.text, 60)}`,
+        hasAttachments: true,
+        action: { kind: action.kind, name: action.name, sourceText: source.text },
+      });
+    },
+    [sendMessage]
+  );
 
   // ── Escape handling ──
   const handleEscape = useCallback(() => {
@@ -453,7 +539,7 @@ export const PeekSurface: React.FC = () => {
   }, [messages]);
 
   const handleCopyLast = useCallback(async () => {
-    const text = lastAssistantText();
+    const text = usePeekStore.getState().pendingResult?.text ?? lastAssistantText();
     if (!text) {
       setToast({ type: 'error', text: 'No answer to copy yet' });
       setTimeout(() => setToast(null), 2000);
@@ -474,6 +560,11 @@ export const PeekSurface: React.FC = () => {
   // and only ever copies a *completed* response.
   useEffect(() => {
     if (visible) return;
+    if (appliedRef.current) {
+      // Enter just put the applied result on the clipboard; keep it.
+      appliedRef.current = false;
+      return;
+    }
     if (!useSettingsStore.getState().autoCopyOnHide) return;
     if (usePeekStore.getState().isStreaming) return;
     const msgs = usePeekStore.getState().messages;
@@ -537,13 +628,33 @@ export const PeekSurface: React.FC = () => {
           }))
         );
         setActiveSessionId(session.id);
+        setPendingResult(null);
         useHistoryStore.getState().setOpen(false);
       } catch (err) {
         console.warn('Failed to load session:', err);
       }
     },
-    [setMessages, setActiveSessionId]
+    [setMessages, setActiveSessionId, setPendingResult]
   );
+
+  // ── Actions palette ──
+  // Whether the palette is showing is computed further down, after the panel
+  // state it depends on; the toggle only needs the latest value.
+  const paletteOpenRef = useRef(false);
+  const dismissActions = useCallback(() => {
+    setActionsOpen(false);
+    setActionsDismissed(true);
+  }, [setActionsOpen, setActionsDismissed]);
+  const toggleActions = useCallback(() => {
+    if (usePeekStore.getState().isStreaming) return;
+    if (paletteOpenRef.current) {
+      dismissActions();
+    } else {
+      closePanels();
+      setActionsOpen(true);
+      setActionsDismissed(false);
+    }
+  }, [dismissActions, setActionsOpen, setActionsDismissed]);
 
   // ── Keyboard shortcuts ──
   useShortcuts({
@@ -554,6 +665,7 @@ export const PeekSurface: React.FC = () => {
     onCaptureRegion: handleCaptureRegion,
     onCopyLast: handleCopyLast,
     onQuit: () => { void invoke('quit_app'); },
+    onActions: toggleActions,
   });
 
   // Generic Provider status check
@@ -641,6 +753,15 @@ export const PeekSurface: React.FC = () => {
       };
     }
 
+    if (pendingResult && !isStreaming) {
+      return {
+        tone: 'ok',
+        text: `Enter ${APPLY_VERB} the result and closes`,
+        hint: `Enter ${APPLY_VERB} the result of "${pendingResult.actionName}" to the clipboard and hides Peekaboo. Alt+C copies without closing; typing asks a follow-up.`,
+        onClick: () => { void applyPendingResult(); },
+      };
+    }
+
     if (activeProvider === 'llama') {
       if (serverStatus === 'starting') return { tone: 'warn', text: 'Starting llama.cpp server…' };
       if (serverStatus === 'error') return { tone: 'error', text: 'llama.cpp server failed to start', onClick: openSettings };
@@ -665,7 +786,7 @@ export const PeekSurface: React.FC = () => {
       return { tone: 'warn', text: 'No model selected', onClick: pickModel };
     }
     return null;
-  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name, isStreaming, longWait]);
+  }, [activeProvider, serverStatus, providerStatus, activeModel, provider.name, isStreaming, longWait, pendingResult, applyPendingResult]);
 
   const { isModelsOpen } = useSettingsStore();
   const { isLegendOpen, memoryOverlay } = usePeekStore();
@@ -675,6 +796,45 @@ export const PeekSurface: React.FC = () => {
   // A panel is not — it reserves height in the body below the input instead.
   const gridMinHeight = hasActiveModalHeight ? 350 : undefined;
   const bodyMinHeight = isPanelOpen ? 240 : undefined;
+
+  /*
+   * The palette shows itself when text is attached and something matches the
+   * typed filter, or whenever it was opened explicitly. The filter is the
+   * input box: a typed question stops matching after a word or two, the
+   * palette drops away, and Enter sends the question as it always did. Esc
+   * dismisses it until new text arrives or the overlay is summoned again.
+   */
+  const { hiddenBuiltIns, customActions } = useActionsStore();
+  const visibleActions = useMemo(
+    () => selectVisibleActions({ hiddenBuiltIns, customActions }),
+    [hiddenBuiltIns, customActions]
+  );
+  const matchingActions = useMemo(() => filterActions(visibleActions, input), [visibleActions, input]);
+  const attachedText = useMemo<ActionSource | null>(() => {
+    const texts = attachments.filter((a) => !a.mediaType.startsWith('image/'));
+    if (texts.length === 0) return null;
+    return {
+      origin: 'attachment',
+      label: texts.length === 1 ? texts[0].label : `${texts.length} attachments`,
+      text: texts.map((a) => a.content).join('\n\n'),
+    };
+  }, [attachments]);
+  const autoShowActions =
+    !!attachedText && !actionsDismissed && matchingActions.length > 0 && !input.startsWith('/');
+  const paletteOpen = !isStreaming && !isPanelOpen && !viewingAttachment && (actionsOpen || autoShowActions);
+  paletteOpenRef.current = paletteOpen;
+
+  // New text is a reason to show the palette again after a dismissal.
+  useEffect(() => {
+    if (attachedText) setActionsDismissed(false);
+  }, [attachedText, setActionsDismissed]);
+
+  const inputPlaceholder =
+    pendingResult && !isStreaming
+      ? `Enter ${APPLY_VERB} the result · or ask a follow-up…`
+      : paletteOpen
+        ? 'Pick an action, or ask anything…'
+        : undefined;
 
   useEffect(() => {
     if (!setupCompleted) {
@@ -709,6 +869,7 @@ export const PeekSurface: React.FC = () => {
               {/* Input */}
               <Input
                 onSubmit={handleSubmit}
+                placeholder={inputPlaceholder}
                 onAbort={abortStream}
                 onAttachFragment={(f) => {
                   // A fragment's type is its media type. Hardcoding text/plain
@@ -758,11 +919,22 @@ export const PeekSurface: React.FC = () => {
                 }}
               />
 
+              <ActionsPalette
+                open={paletteOpen}
+                explicit={actionsOpen}
+                actions={matchingActions}
+                query={input}
+                attachedText={attachedText}
+                onRun={runAction}
+                onClose={dismissActions}
+              />
+
               {/* First-run orientation, dismissed for good once acknowledged. */}
               {showFirstRunHint && (
                 <div className="peek-hint">
                   <div className="peek-hint-items">
                     <span className="peek-hint-item"><kbd className="peek-kbd">Enter</kbd> to ask</span>
+                    <span className="peek-hint-item"><kbd className="peek-kbd">Alt+A</kbd> actions on selected text</span>
                     <span className="peek-hint-item"><kbd className="peek-kbd">Alt+/</kbd> all shortcuts</span>
                     <span className="peek-hint-item"><kbd className="peek-kbd">Esc</kbd> to hide</span>
                     <span className="peek-hint-item"><kbd className="peek-kbd">{formatHotkey(summonHotkey)}</kbd> to bring it back</span>
@@ -927,6 +1099,8 @@ export const PeekSurface: React.FC = () => {
           */}
           <Footer
             onNewChat={handleClear}
+            onActions={toggleActions}
+            actionsOpen={paletteOpen}
             onCaptureRegion={handleCaptureRegion}
             captureDisabledReason={isVisionModel ? null : 'Screen capture needs a vision model'}
             onOpenSettings={() => invoke('open_settings')}

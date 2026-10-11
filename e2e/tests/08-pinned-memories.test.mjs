@@ -19,9 +19,12 @@ async function saveAndPinMemory(app) {
   await app.type('.peek-history-search textarea', MEMORY);
   await app.waitFor('return (document.querySelector(".peek-history-item")?.innerText ?? "").includes("Save")', { what: 'the save action' });
   await app.press('Enter', { css: '.peek-history-search textarea' });
+  // Not "a title containing the text": the "Save …" suggestion row already
+  // has one, so that passed before the save landed and the Pin click raced
+  // the list refresh. The saved row is the one with a pin button.
   await app.waitFor(
-    `return [...document.querySelectorAll(".peek-history-item-title")].some((el) => el.innerText.includes(${JSON.stringify(MEMORY)}))`,
-    { what: 'the saved memory to be listed' },
+    `return !!document.querySelector('[aria-label="Pin: send with every question"]')`,
+    { what: 'the saved memory to be listed with its pin button' },
   );
   await app.clickLabelled('Pin: send with every question');
   await app.waitFor('return !!document.querySelector("[aria-label^=\\"Unpin\\"]")', { what: 'the memory to show as pinned' });

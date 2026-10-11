@@ -38,6 +38,7 @@ const hotkeyGroups = (summon: string): { title: string; keys: LegendKey[] }[] =>
   {
     title: 'Conversation',
     keys: [
+      { key: 'Alt+A', description: 'Actions: fix, rewrite, explain the selected or copied text' },
       { key: 'Alt+N', description: 'New chat' },
       { key: 'Alt+Q', description: 'Stop the response' },
       { key: 'Alt+C', description: 'Copy the last answer' },

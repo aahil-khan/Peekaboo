@@ -291,6 +291,10 @@ export const Setup: React.FC = () => {
               <span className="peek-form-hint"> + </span>
               <kbd className="peek-kbd">/</kbd> lists every shortcut.
             </p>
+            <p className="peek-wizard-subtitle">
+              Select text first and the overlay opens with actions ready: fix grammar, make shorter,
+              translate, explain, summarise. Pick one with the arrow keys and Enter.
+            </p>
             <button className="peek-btn peek-btn--primary" onClick={finish}>
               Start using Peekaboo
             </button>
