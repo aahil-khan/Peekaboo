@@ -90,6 +90,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             window::show_peek,
             window::hide_peek,
+            window::finish_hide,
             window::toggle_peek,
             window::open_settings,
             window::quit_app,

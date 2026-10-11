@@ -2,7 +2,7 @@
 //! app-wide settings the frontend pushes down. Nothing OS-specific lives here;
 //! that goes through `crate::platform`.
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, State, WebviewUrl, WebviewWindow};
 
@@ -13,6 +13,36 @@ pub fn get_peek_window(app: &AppHandle) -> Option<WebviewWindow> {
 }
 
 static POSITIONED: AtomicBool = AtomicBool::new(false);
+
+// ─── Dismissal ───────────────────────────────────────────────────────
+// Hiding the overlay is two steps: tell the page, which fades the surface
+// out, then unmap the window once the page says the fade is done. Unmapping
+// straight away (as this used to) meant the fade never played, because a
+// hidden webview gets no animation frames; and since the surface was then
+// frozen fully visible, the fade-in on the next summon had nothing to animate
+// from either. Summon and dismiss both just popped.
+
+/// True between "the page was told to fade out" and "the window is unmapped".
+static HIDING: AtomicBool = AtomicBool::new(false);
+/// Bumped by every show and every hide, so a finish that arrives late (the
+/// fallback timer, or the page's acknowledgement after a re-summon) can tell
+/// it belongs to a dismissal that is no longer the current one.
+static VISIBILITY_GENERATION: AtomicU64 = AtomicU64::new(0);
+/// How long to wait for the page before unmapping anyway. The fade is 80 ms;
+/// this only matters if the page is hung or was never loaded.
+const HIDE_FALLBACK: std::time::Duration = std::time::Duration::from_millis(400);
+
+/// Unmap the window, if dismissal `generation` is still the one in progress.
+fn finish_hide_if_current(app: &AppHandle, generation: u64) {
+    if VISIBILITY_GENERATION.load(Ordering::SeqCst) != generation {
+        return;
+    }
+    if HIDING.swap(false, Ordering::SeqCst) {
+        if let Some(window) = get_peek_window(app) {
+            let _ = window.hide();
+        }
+    }
+}
 
 #[derive(Default, serde::Deserialize, Clone)]
 pub struct AppSettings {
@@ -45,18 +75,47 @@ pub fn show_peek(app: AppHandle) {
                 POSITIONED.store(true, Ordering::Relaxed);
             }
         }
+        // A summon during the fade-out cancels the dismissal: whatever finish
+        // is still on its way now carries a stale generation.
+        VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst);
+        HIDING.store(false, Ordering::SeqCst);
         let _ = window.show();
         let _ = window.set_focus();
         let _ = app.emit("peek-visibility", true);
     }
 }
 
+/// Dismiss the overlay: the page fades the surface out and calls
+/// `finish_hide`, which unmaps the window. Code that needs the window gone
+/// *now* (to capture the screen, or to hand focus back before pasting) should
+/// call `window.hide()` itself rather than wait on this.
 #[tauri::command]
 pub fn hide_peek(app: AppHandle) {
-    if let Some(window) = get_peek_window(&app) {
+    let Some(window) = get_peek_window(&app) else {
+        return;
+    };
+    if !window.is_visible().unwrap_or(false) {
+        // Nothing to fade. Still tell the page, so its state cannot disagree.
         let _ = app.emit("peek-visibility", false);
-        let _ = window.hide();
+        return;
     }
+    if HIDING.swap(true, Ordering::SeqCst) {
+        return; // already on its way out
+    }
+    let generation = VISIBILITY_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let _ = app.emit("peek-visibility", false);
+
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(HIDE_FALLBACK);
+        finish_hide_if_current(&app, generation);
+    });
+}
+
+/// The page's acknowledgement that the fade-out has finished.
+#[tauri::command]
+pub fn finish_hide(app: AppHandle) {
+    finish_hide_if_current(&app, VISIBILITY_GENERATION.load(Ordering::SeqCst));
 }
 
 #[tauri::command]
@@ -87,7 +146,9 @@ pub fn toggle_peek(app: AppHandle, state: State<'_, AppState>) {
     }
 
     if let Some(window) = get_peek_window(&app) {
-        if window.is_visible().unwrap_or(false) {
+        // Mid-fade the window is still mapped, but the user has already
+        // dismissed it, so the key means "bring it back".
+        if window.is_visible().unwrap_or(false) && !HIDING.load(Ordering::SeqCst) {
             hide_peek(app);
         } else {
             show_peek(app);
