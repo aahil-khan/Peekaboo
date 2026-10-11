@@ -327,7 +327,12 @@ export const PeekSurface: React.FC = () => {
       // A result left unapplied when the overlay hid should not be applied by
       // a stray Enter an hour later. A transform that finishes while hidden
       // sets a fresh one after this runs, so Esc-and-come-back still works.
-      usePeekStore.getState().setPendingResult(null);
+      // The exception is paste-back's own hide: it unmaps the window to reach
+      // the previous app, and if it is refused the overlay comes back needing
+      // the result still there, so applyPendingResult owns clearing it then.
+      if (!applyingRef.current) {
+        usePeekStore.getState().setPendingResult(null);
+      }
       usePeekStore.getState().setActionsOpen(false);
     }
     // Showing the overlay is a new start for the palette: text attached on
@@ -356,14 +361,17 @@ export const PeekSurface: React.FC = () => {
     // Either way the result is on the clipboard now; the copy-on-hide option
     // must not overwrite it with the raw answer.
     appliedRef.current = true;
-    setPendingResult(null);
     if (outcome.outcome === 'copied') {
-      // Rust showed the overlay again; say what happened and why. Esc hides
-      // it and focus goes back to the app for the manual paste.
+      // Rust brought the overlay back. Keep the pending result so the footer
+      // still offers Enter (a retry) and say what happened: the result is on
+      // the clipboard, paste it with the platform chord.
       setToast({ type: 'error', text: copiedInsteadMessage(outcome.reason) });
       setTimeout(() => setToast(null), 8000);
+    } else {
+      // Pasted: Rust already faded the window out. Drop the result so a later
+      // stray Enter cannot re-apply it.
+      setPendingResult(null);
     }
-    // On 'pasted' Rust already hid the window and emitted peek-visibility.
   }, [setPendingResult]);
 
   // ── Send one user turn and stream the reply ──

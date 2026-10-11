@@ -99,9 +99,35 @@ test('select, summon, read, paste back: the native loop into the window the text
       return text === PRIOR_CLIPBOARD ? text : null;
     }, { timeout: 5000, what: 'the clipboard to be restored' });
     assert.equal(restored, PRIOR_CLIPBOARD);
+
+    // The paste hid the overlay through the normal two-step fade, not a
+    // direct unmap, so the surface ran its exit and left the DOM; the next
+    // summon mounts a fresh one rather than popping a frozen surface.
+    await app.waitFor('return !document.querySelector(".peek-surface")', { what: 'the overlay surface to finish fading out after the paste' });
+    assert.equal(await app.exec('return document.visibilityState'), 'hidden');
   } finally {
     win.close();
   }
+}));
+
+// The summon chord is a global X11 grab, so on Xvfb it fires whatever has
+// focus and this drives summon() through two real presses. Under mutter the
+// overlay is Wayland-native and the compositor routes the chord to it (and the
+// RemoteDesktop injection itself disturbs its focus), so the grab never fires;
+// the invoke-based double-toggle in 12-summon-dismiss covers that display, and
+// summon() shares toggle_peek()'s exact `overlay_is_up` rule in Rust.
+test('two quick summon chords leave the overlay shown (summon shares the dismissal rule)', { skip: env.displayKind === 'xvfb' ? false : 'real summon-chord routing only reaches the X11 grab on Xvfb' }, withApp({ settings: seededSettings() }, async (app, t) => {
+  await app.showOverlay();
+  // First chord dismisses (starts the fade and arms the unmap fallback); the
+  // second, during the fade, must win and bring the overlay back, and the
+  // first press's stale timer must not hide it afterwards.
+  await pressChord();
+  await pressChord();
+  await sleep(900); // well past the 400 ms unmap fallback
+  const visibility = await app.exec('return document.visibilityState');
+  t.diagnostic(`after two real summon chords: ${visibility}`);
+  assert.equal(visibility, 'visible', 'the overlay is still shown; no stale timer hid it after the re-summon');
+  await app.waitFor('return !!document.querySelector(".peek-surface textarea")', { what: 'the surface to be present' });
 }));
 
 test('a summon with nothing selected opens the overlay without an attachment', { skip: display ? false : 'no X11 display on this run' }, withApp({ settings: seededSettings() }, async (app) => {

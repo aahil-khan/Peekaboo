@@ -80,23 +80,19 @@ pub async fn paste_result(app: AppHandle, text: String) -> Result<PasteOutcome, 
         Plan::Portal(note) => portal_paste(&app).await.map(|()| format!("RemoteDesktop portal; {note}")),
     };
 
-    let window = crate::window::get_peek_window(&app);
     match delivery {
         Ok(method) => {
             schedule_restore(prepared.snapshot, prepared.count_after_set, prepared.text);
             focus::clear_at_summon();
-            // The window is already hidden; this emits the visibility event
-            // the frontend resets on, and the size reset.
-            crate::window::hide_peek(app.clone());
+            // The overlay was already faded out and unmapped in `prepare`.
             Ok(PasteOutcome::Pasted { method })
         }
         Err(reason) => {
             eprintln!("paste-back: copied instead: {reason}");
             if prepared.was_visible {
-                if let Some(w) = &window {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                }
+                // Bring the overlay back through the normal path, so the page
+                // is told and can show the result and why it was copied.
+                crate::window::show_peek(app.clone());
             }
             Ok(PasteOutcome::Copied { reason })
         }
@@ -109,19 +105,25 @@ fn prepare(app: &AppHandle, text: String) -> Result<Prepared, String> {
     cb.set_text(&text)?;
     let count_after_set = cb.change_count();
 
-    // Hide without the visibility event: if the paste is refused the
-    // overlay comes back with its state intact to say so.
+    // Dismiss through the normal path: the page fades the surface out and
+    // then the window unmaps. Unmapping it directly (as this once did) would
+    // freeze the surface mid-exit, because a hidden webview gets no animation
+    // frames, and the next summon would pop in instead of fading. Wait for the
+    // window to be gone before touching focus: the previous app only gets
+    // keyboard focus back once our window is unmapped.
     let window = crate::window::get_peek_window(app);
     let was_visible = window.as_ref().and_then(|w| w.is_visible().ok()).unwrap_or(false);
     if was_visible {
-        if let Some(w) = &window {
-            let _ = w.hide();
-        }
+        crate::window::hide_peek(app.clone());
+        crate::window::wait_until_hidden(app, Duration::from_millis(700));
+        // A grace for the X server to process the unmap and revert focus;
+        // the GTK visibility flag flips before the X UnmapNotify lands.
+        std::thread::sleep(Duration::from_millis(60));
     }
 
     let at_summon = focus::at_summon();
     let own_pid = std::process::id();
-    let mut now = settle_focus(own_pid, Duration::from_millis(700));
+    let mut now = settle_focus(own_pid, Duration::from_millis(500));
     // X11 without a window manager (and Windows, on occasion) leaves nothing
     // focused after our window unmaps; give the recorded window its focus
     // back. Never a different window.
