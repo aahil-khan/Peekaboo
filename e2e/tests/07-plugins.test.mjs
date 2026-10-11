@@ -75,20 +75,18 @@ test('/clipboard previews what the clipboard holds', withApp({ settings: seededS
   await app.showOverlay();
   await app.type('.peek-surface textarea', '/');
   await app.waitFor('return document.querySelectorAll(".peek-slash-item-title").length > 0', { what: 'the slash menu' });
-  // Put something on the (private compositor's) clipboard through the same
-  // plugin API the app uses; a headless compositor has no clipboard manager.
-  await app.invoke('plugin:clipboard-manager|write_text', { data: { plainText: { text: 'copied for the e2e test' } } }).catch(() => {});
+  // Put something on the private display's clipboard through the same plugin
+  // command the app's writeText() uses.
+  await app.invoke('plugin:clipboard-manager|write_text', { text: 'copied for the e2e test' });
   await app.type('.peek-surface textarea', '/clipboard ');
   // The menu shows "Type to search." until the plugin's search() answers, so
   // wait for the plugin's own words rather than for the first thing on screen.
-  // Either the text came back through the compositor, or the plugin reports
-  // honestly that it could not read the clipboard; both are correct behaviour.
-  const first = await app.waitFor(
-    `const el = document.querySelector(".peek-slash-item-title, .peek-slash-group");
+  const preview = await app.waitFor(
+    `const el = document.querySelector(".peek-slash-item-title");
      const text = el ? el.innerText.trim() : "";
-     return /copied for the e2e test|Clipboard (is empty|unavailable)/.test(text) ? text : null;`,
-    { what: 'the clipboard plugin to answer (a preview, "Clipboard is empty" or "Clipboard unavailable")' },
+     return text.includes("copied for the e2e test") ? text : null;`,
+    { what: 'the clipboard plugin to preview the copied text' },
   );
-  assert.ok(first.length > 0);
+  assert.match(preview, /copied for the e2e test/);
   await app.shot('plugins-clipboard');
 }));

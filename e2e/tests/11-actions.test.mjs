@@ -6,9 +6,8 @@ import { withApp, seededSettings, mock } from '../lib/app.mjs';
  * The actions loop end to end: text to act on, one key to open the palette,
  * a transform run from the keyboard, and Enter to apply the result.
  *
- * The text goes in through the clipboard rather than the selection-capture
- * plugin: JS plugins do not load in a built app (harness PR, bug 1), and the
- * palette's own clipboard path is the one that has to work regardless. The
+ * The text goes in through the clipboard, by the palette's own clipboard
+ * path, which does not depend on any plugin having loaded. The
  * mock answers with the quoted form a small model tends to produce, so the
  * assertion on the clipboard also covers the output cleanup.
  */
