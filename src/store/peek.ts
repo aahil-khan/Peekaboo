@@ -10,6 +10,11 @@ export interface BackgroundTask {
   sessionId: string;
 }
 
+export interface PendingResult {
+  text: string;
+  actionName: string;
+}
+
 interface PeekState {
   // Visibility
   visible: boolean;
@@ -41,6 +46,17 @@ interface PeekState {
   // Legend
   isLegendOpen: boolean;
   setLegendOpen: (v: boolean) => void;
+
+  // Actions palette. `actionsOpen` is the explicit open (Alt+A, footer);
+  // the palette also shows itself when text is attached, unless dismissed.
+  actionsOpen: boolean;
+  setActionsOpen: (v: boolean) => void;
+  actionsDismissed: boolean;
+  setActionsDismissed: (v: boolean) => void;
+
+  // A finished transform, waiting for Enter to apply it.
+  pendingResult: PendingResult | null;
+  setPendingResult: (r: PendingResult | null) => void;
 
   // Reset
   clear: () => void;
@@ -92,6 +108,14 @@ export const usePeekStore = create<PeekState>((set) => ({
   isLegendOpen: false,
   setLegendOpen: (v) => set({ isLegendOpen: v }),
 
+  actionsOpen: false,
+  setActionsOpen: (v) => set({ actionsOpen: v }),
+  actionsDismissed: false,
+  setActionsDismissed: (v) => set({ actionsDismissed: v }),
+
+  pendingResult: null,
+  setPendingResult: (r) => set({ pendingResult: r }),
+
   memoryOverlay: { isOpen: false, title: '', items: [] },
   setMemoryOverlay: (update) => set((s) => ({ memoryOverlay: { ...s.memoryOverlay, ...update } })),
 
@@ -102,5 +126,8 @@ export const usePeekStore = create<PeekState>((set) => ({
       activeSessionId: null,
       streamingContent: '',
       isStreaming: false,
+      actionsOpen: false,
+      actionsDismissed: false,
+      pendingResult: null,
     }),
 }));

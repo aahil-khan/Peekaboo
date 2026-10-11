@@ -26,6 +26,8 @@ export interface FooterStatus {
 
 interface FooterProps {
   onNewChat: () => void;
+  onActions: () => void;
+  actionsOpen: boolean;
   onCaptureRegion: () => void;
   /** When set, capture is unavailable and this explains why. */
   captureDisabledReason?: string | null;
@@ -65,6 +67,8 @@ const svg = (children: React.ReactNode) => (
 
 export const Footer: React.FC<FooterProps> = ({
   onNewChat,
+  onActions,
+  actionsOpen,
   onCaptureRegion,
   captureDisabledReason,
   onOpenSettings,
@@ -83,6 +87,10 @@ export const Footer: React.FC<FooterProps> = ({
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
+      </IconButton>
+
+      <IconButton label="Actions on your text" shortcut="Alt+A" active={actionsOpen} onClick={onActions}>
+        {svg(<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />)}
       </IconButton>
 
       <IconButton label="History" shortcut="Alt+H" active={openPanel === 'history'} onClick={() => togglePanel('history')}>

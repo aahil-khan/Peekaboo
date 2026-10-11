@@ -1039,6 +1039,88 @@ html[data-window='peek'] {
   color: var(--peek-text-muted);
 }
 
+/* ═══ Actions palette ═══════════════════════════════════════════════════ */
+
+/*
+ * Same in-flow list idiom as the slash menu above, and the same rows: the
+ * palette is the `/` menu's sibling, not a new kind of surface. What it adds
+ * is the source row, which names the text the actions will run on — the
+ * clipboard is invisible state, so without it Enter would act on a surprise.
+ */
+.peek-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid var(--peek-border);
+}
+
+.peek-actions-source {
+  display: flex;
+  align-items: center;
+  gap: var(--peek-space-2);
+  min-width: 0;
+  padding: var(--peek-space-2) var(--peek-space-4);
+  border-bottom: 1px solid var(--peek-border-subtle);
+  background: linear-gradient(to bottom, rgba(var(--peek-tint-rgb), 0.035), transparent);
+  font-size: var(--peek-text-sm);
+  color: var(--peek-text-muted);
+}
+
+.peek-actions-source-label {
+  flex-shrink: 0;
+  font-size: var(--peek-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.peek-actions-source-name {
+  flex-shrink: 0;
+  color: var(--peek-text-secondary);
+  font-weight: 500;
+}
+
+.peek-actions-source-preview {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: italic;
+}
+
+.peek-actions-source-meta {
+  flex-shrink: 0;
+  font-size: var(--peek-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.peek-actions-source-empty {
+  min-width: 0;
+  color: var(--peek-text-secondary);
+}
+
+.peek-actions-list {
+  max-height: 232px;
+  overflow-y: auto;
+  padding: var(--peek-space-1);
+}
+
+.peek-actions-list[aria-disabled='true'] .peek-actions-item {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.peek-actions-yours {
+  flex-shrink: 0;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--peek-badge-bg);
+  color: var(--peek-text-muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+
 /* ═══ Attachment Chips ══════════════════════════════════════════════════ */
 
 .peek-attachments {
@@ -1245,6 +1327,16 @@ html[data-window='peek'] {
   word-break: break-word;
   user-select: text;
   white-space: pre-wrap;
+}
+
+/* An action's turn shows the action's name, marked so it reads as a command
+   rather than something the user typed. */
+.peek-thread-user-bubble--action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  color: var(--peek-accent);
 }
 
 .peek-thread-assistant {

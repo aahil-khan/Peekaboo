@@ -8,6 +8,9 @@ import { ProviderFields } from './ProviderFields';
 import { HotkeyRecorder } from './HotkeyRecorder';
 import { useLlamaServer } from '../hooks/useLlamaServer';
 import { usePluginsStore } from '../store/plugins';
+import { useActionsStore } from '../store/actions';
+import { BUILTIN_ACTIONS, KIND_LABELS, type Action } from '../lib/actions';
+import { ActionEditor } from './ActionEditor';
 import { BUILTIN_PROVIDERS, providerLabel, verifyProvider } from '../lib/providerCatalog';
 
 /**
@@ -18,11 +21,12 @@ import { BUILTIN_PROVIDERS, providerLabel, verifyProvider } from '../lib/provide
  * left rail, so each area is one screen and reachable in a click.
  */
 
-type SectionId = 'general' | 'provider' | 'assistant' | 'plugins' | 'data';
+type SectionId = 'general' | 'provider' | 'actions' | 'assistant' | 'plugins' | 'data';
 
 const SECTIONS: { id: SectionId; label: string }[] = [
   { id: 'general', label: 'General' },
   { id: 'provider', label: 'AI provider' },
+  { id: 'actions', label: 'Actions' },
   { id: 'assistant', label: 'Assistant' },
   { id: 'plugins', label: 'Plugins' },
   { id: 'data', label: 'Data & privacy' },
@@ -54,6 +58,20 @@ export const Settings: React.FC = () => {
 
   const [section, setSection] = useState<SectionId>('general');
   const [showAddProfile, setShowAddProfile] = useState(false);
+
+  const {
+    hiddenBuiltIns, hideBuiltIn, showBuiltIn,
+    customActions, addAction, updateAction, deleteAction,
+  } = useActionsStore();
+  // 'new' is the add form; an id is the edit form for that action.
+  const [actionEditor, setActionEditor] = useState<'new' | string | null>(null);
+  const editingAction = typeof actionEditor === 'string' && actionEditor !== 'new'
+    ? customActions.find((a) => a.id === actionEditor) ?? null
+    : null;
+  const duplicateAction = (a: Action) => {
+    const copy = addAction({ name: `${a.name} (copy)`, prompt: a.prompt, kind: a.kind });
+    setActionEditor(copy.id);
+  };
   const [editingProfile, setEditingProfile] = useState<LlamaProfile | null>(null);
 
   const [draftProvider, setDraftProvider] = useState<string>(activeProvider);
@@ -400,6 +418,125 @@ export const Settings: React.FC = () => {
                       </div>
                     )}
                   </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
+
+        {section === 'actions' && (
+          <>
+            <h2 className="peek-settings-h2">Actions</h2>
+            <p className="peek-settings-intro">
+              What Peekaboo can do to the text in front of you. Select text and summon the overlay,
+              or press <kbd className="peek-kbd">Alt+A</kbd> to act on the clipboard, then pick one.
+              An action that replaces the text puts its result where the text came from; one that
+              answers gives you something to read.
+            </p>
+
+            <div className="peek-settings-card">
+              <span className="peek-settings-rowtext">
+                <span className="peek-settings-label">Built in</span>
+                <span className="peek-settings-desc">
+                  Switch off the ones you never use. To change a prompt, duplicate it and edit the copy.
+                </span>
+              </span>
+              {BUILTIN_ACTIONS.map((a) => {
+                const shown = !hiddenBuiltIns.includes(a.id);
+                return (
+                  <React.Fragment key={a.id}>
+                    <div className="peek-settings-divider" />
+                    <div className="peek-settings-row">
+                      <span className="peek-settings-rowtext">
+                        <span className="peek-settings-label" style={{ opacity: shown ? 1 : 0.5 }}>{a.name}</span>
+                        <span className="peek-settings-desc">{KIND_LABELS[a.kind]}</span>
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                        <button className="peek-btn peek-btn--sm" onClick={() => duplicateAction(a)}>
+                          Duplicate
+                        </button>
+                        <button
+                          className="peek-switch"
+                          role="switch"
+                          aria-checked={shown}
+                          aria-label={`Show ${a.name} in the palette`}
+                          onClick={() => (shown ? hideBuiltIn(a.id) : showBuiltIn(a.id))}
+                        />
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <div className="peek-settings-card">
+              <div className="peek-settings-row">
+                <span className="peek-settings-rowtext">
+                  <span className="peek-settings-label">Your actions</span>
+                  <span className="peek-settings-desc">
+                    A name and a prompt with <code>{'{{text}}'}</code> where the text goes. They appear in
+                    the palette next to the built-in ones.
+                  </span>
+                </span>
+                {actionEditor !== 'new' && (
+                  <button
+                    className="peek-btn peek-btn--secondary"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => setActionEditor('new')}
+                  >
+                    Add action
+                  </button>
+                )}
+              </div>
+
+              {actionEditor === 'new' && (
+                <>
+                  <div className="peek-settings-divider" />
+                  <ActionEditor
+                    action={null}
+                    onSave={(input) => { addAction(input); setActionEditor(null); }}
+                    onCancel={() => setActionEditor(null)}
+                  />
+                </>
+              )}
+
+              {customActions.map((a) => (
+                <React.Fragment key={a.id}>
+                  <div className="peek-settings-divider" />
+                  {editingAction?.id === a.id ? (
+                    <ActionEditor
+                      action={editingAction}
+                      onSave={(input) => { updateAction(a.id, input); setActionEditor(null); }}
+                      onCancel={() => setActionEditor(null)}
+                    />
+                  ) : (
+                    <div className="peek-settings-row">
+                      <span className="peek-settings-rowtext">
+                        <span className="peek-settings-label">{a.name}</span>
+                        <span className="peek-settings-desc">{KIND_LABELS[a.kind]}</span>
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        <button className="peek-btn peek-btn--sm" onClick={() => setActionEditor(a.id)}>
+                          Edit
+                        </button>
+                        <button
+                          className="peek-btn peek-btn--sm"
+                          onClick={() => {
+                            if (window.confirm(`Delete "${a.name}"?`)) deleteAction(a.id);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </React.Fragment>
+              ))}
+
+              {customActions.length === 0 && actionEditor !== 'new' && (
+                <>
+                  <div className="peek-settings-divider" />
+                  <span className="peek-settings-desc">None yet.</span>
                 </>
               )}
             </div>

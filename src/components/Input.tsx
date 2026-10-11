@@ -6,6 +6,8 @@ import type { PluginManifest, MenuItem, ContextFragment } from '../lib/plugins/t
 
 interface InputProps {
   onSubmit: () => void;
+  /** Replaces "Ask anything..." when there is something more useful to say. */
+  placeholder?: string;
   onAttachImage?: (base64: string, mediaType: string) => void;
   onAttachFragment?: (fragment: ContextFragment) => void;
   onPasteReject?: (message: string) => void;
@@ -27,7 +29,7 @@ function nextSelectableIndex(items: MenuItem[], from: number, direction: 1 | -1)
   return from;
 }
 
-export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachFragment, onPasteReject, onAbort }) => {
+export const Input: React.FC<InputProps> = ({ onSubmit, placeholder, onAttachImage, onAttachFragment, onPasteReject, onAbort }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const slashMenuRef = useRef<HTMLDivElement>(null);
   const { input, setInput, isStreaming, visible } = usePeekStore();
@@ -288,7 +290,9 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
 
     if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
-      if (input.trim() && !isStreaming) {
+      // An empty box is not always a no-op: after a transform, Enter applies
+      // the result. The parent decides; it ignores an empty box otherwise.
+      if (!isStreaming) {
         onSubmit();
       }
     }
@@ -335,7 +339,7 @@ export const Input: React.FC<InputProps> = ({ onSubmit, onAttachImage, onAttachF
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Ask anything..."
+          placeholder={placeholder ?? 'Ask anything...'}
           rows={1}
           disabled={isStreaming}
           spellCheck={false}
