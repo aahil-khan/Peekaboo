@@ -22,12 +22,17 @@ const ANSWER_DONE = `
   const last = turns[turns.length - 1];
   return !!last && !last.dataset.live && !last.querySelector(".peek-loading-dots") && last.innerText.trim().length > 0;`;
 
-/** Puts `text` on the compositor's clipboard; false when this display has none. */
-async function seedClipboard(app, text) {
+/**
+ * Puts `text` on the display's clipboard through the same plugin command the
+ * app's writeText() uses (its arguments are `{ label, text }`); false, with
+ * the reason on the test log, when this display has no clipboard.
+ */
+async function seedClipboard(app, text, t) {
   try {
-    await app.invoke('plugin:clipboard-manager|write_text', { data: { plainText: { text } } });
+    await app.invoke('plugin:clipboard-manager|write_text', { text });
     return true;
-  } catch {
+  } catch (err) {
+    t.diagnostic(`clipboard write failed: ${err.message ?? err}`);
     return false;
   }
 }
@@ -48,7 +53,7 @@ test('a transform runs from the keyboard and Enter copies the cleaned result', w
   await mock.configure({ tokens: ANSWER_TOKENS, delayMs: 20 });
   await app.showOverlay();
 
-  if (!(await seedClipboard(app, TEXT))) {
+  if (!(await seedClipboard(app, TEXT, t))) {
     t.skip('this display has no clipboard to seed');
     return;
   }
@@ -96,7 +101,7 @@ test('a transform runs from the keyboard and Enter copies the cleaned result', w
 test('a follow-up after an action sends the rendered prompt as history', withApp({ settings: seededSettings() }, async (app, t) => {
   await mock.reset();
   await app.showOverlay();
-  if (!(await seedClipboard(app, TEXT)) || (await openPalette(app)) === 'empty') {
+  if (!(await seedClipboard(app, TEXT, t)) || (await openPalette(app)) === 'empty') {
     t.skip('no clipboard on this display');
     return;
   }
@@ -115,7 +120,7 @@ test('a follow-up after an action sends the rendered prompt as history', withApp
 test('a typed question keeps Enter while the palette is open', withApp({ settings: seededSettings() }, async (app, t) => {
   await mock.reset();
   await app.showOverlay();
-  if (!(await seedClipboard(app, TEXT)) || (await openPalette(app)) === 'empty') {
+  if (!(await seedClipboard(app, TEXT, t)) || (await openPalette(app)) === 'empty') {
     t.skip('no clipboard on this display');
     return;
   }
