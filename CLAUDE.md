@@ -6,7 +6,12 @@ A keyboard-summoned AI overlay for the desktop, built with Tauri v2 (Rust) + Rea
 
 ## Layout
 - `src/`: the React frontend (`components/`, `store/` for Zustand slices, `providers/` for model backends, `db/` for SQLite access, `hooks/`, `lib/`).
-- `src-tauri/`: the Rust shell (`src/lib.rs` holds most native code and the unit tests; `capabilities/` holds Tauri permissions; `tauri.conf.json`).
+- `src-tauri/`: the Rust shell (`capabilities/` holds Tauri permissions; `tauri.conf.json`). `src/lib.rs` is only `run()` and module declarations; every `#[tauri::command]` lives in a submodule, never at the crate root (see the comment in `lib.rs`). Unit tests sit beside the code they test.
+  - `src/window.rs`: the overlay, settings and setup windows, `AppState`.
+  - `src/hotkey.rs`: the summon shortcut and its config file.
+  - `src/plugins/`: `discovery.rs` (built-ins and the user directory), `fs.rs` (the filesystem allowlist and read/write), `files.rs` (file loading for attachments and search), `sysinfo.rs`.
+  - `src/platform/`: OS-specific code behind one facade (`mod.rs`), one file per capability: `selection.rs`, `paste.rs` (`type_text`), `capture.rs`, `active_window.rs`. Each file holds its own `cfg(target_os)` blocks for Linux, Windows and macOS; a new OS implementation of a capability edits only that file. `commands.rs` holds the thin Tauri wrappers.
+  - `src/llama.rs`: the llama.cpp server process and the app's quit path.
 - `plugins/`: built-in plugins (clipboard, file, openai-compatible, selection-capture). The plugin contract is documented in `plugins/README.md`.
 - `src/providers/http.ts`: the one HTTP path for every provider (Rust client inside Tauri, `fetch` in a plain browser). New network code goes through it, not `window.fetch`.
 - `docs/AUDIT-2026-10.md`: the audit and roadmap.
