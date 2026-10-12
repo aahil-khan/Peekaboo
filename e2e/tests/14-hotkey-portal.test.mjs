@@ -189,7 +189,10 @@ test('a declined consent dialog falls back to the X11 grab and says what to do',
   }, { what: 'get_hotkey to report the decline' });
   assert.equal(info.managedBySystem, false);
   assert.match(info.note, /cancelled in the system dialog/);
-  assert.match(info.note, /peekaboo-app/, 'the documented fallback is named');
+  // On a Wayland display the X11 grab only reaches Xwayland apps, so the note
+  // names the documented fallback; on Xvfb the grab is global and it does not.
+  if (env.displayKind === 'mutter') assert.match(info.note, /peekaboo-app/, 'the documented fallback is named');
+  else assert.match(info.note, /works from every app/);
   assert.match(app.appLog(), /hotkey: the portal did not bind a key \(the request was cancelled in the system dialog\)/);
   if (env.expected.DISPLAY) {
     assert.equal(info.backend, 'native');
