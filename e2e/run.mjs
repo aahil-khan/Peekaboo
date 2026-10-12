@@ -88,7 +88,26 @@ async function main() {
   for (const key of Object.keys(baseEnv)) if (baseEnv[key] === undefined) delete baseEnv[key];
 
   const busPath = path.join(runDir, 'bus');
-  procs.start('dbus', 'dbus-daemon', ['--session', '--nofork', '--nopidfile', `--address=unix:path=${busPath}`], { env: baseEnv });
+  // Not `--session`: the stock session config lists the system's service
+  // directories, so the app's first portal call would D-Bus-activate the real
+  // xdg-desktop-portal (and its GNOME or GTK backend) on this bus. This
+  // config has no service directories, so nothing can be activated here and a
+  // test can play a portal itself (lib/mock-portal.py).
+  const busConfig = path.join(runDir, 'bus.conf');
+  fs.writeFileSync(busConfig, `<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN" "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <keep_umask/>
+  <listen>unix:path=${busPath}</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+`);
+  procs.start('dbus', 'dbus-daemon', [`--config-file=${busConfig}`, '--nofork', '--nopidfile'], { env: baseEnv });
   await waitUntil(() => fileExists(busPath), { what: 'the private session bus' });
   baseEnv.DBUS_SESSION_BUS_ADDRESS = `unix:path=${busPath}`;
   // No accessibility bus on the private session; GTK would otherwise try to

@@ -53,21 +53,31 @@ function xwindow() {
   return { child, events, mapped, close: () => { child.stdin.end(); child.kill(); } };
 }
 
-// Without X11 the chord cannot be registered, and Rust is written to say so
-// in `error`. It does not: the global-hotkey crate opens its X11 connection
-// on a thread and reports Ok when that thread has died, so the app believes
-// the hotkey is live on a pure-Wayland session. Bug 2 in the harness PR.
-const SILENT_X11_FAILURE = 'the app reports the hotkey as registered with no X11 display (harness PR, bug 2)';
-
-test('get_hotkey reports the default chord, registered', { todo: display ? false : SILENT_X11_FAILURE }, withApp({ settings: seededSettings() }, async (app, t) => {
+// Without X11 the chord cannot be registered, and Rust says so in `error`.
+// The global-hotkey crate itself would not: it opens its X11 connection on a
+// thread and reports Ok when that thread has died (bug 2 in the harness PR),
+// so the hotkey module checks the display before trusting it.
+test('get_hotkey reports the default chord, registered', withApp({ settings: seededSettings() }, async (app, t) => {
   const info = await app.invoke('get_hotkey');
   assert.equal(info.default, DEFAULT);
   assert.equal(info.hotkey, DEFAULT);
   if (display) {
     assert.equal(info.error, null, `the default registered on ${display}`);
+    assert.equal(info.registered, true);
+    assert.equal(info.backend, 'native');
   } else {
     t.diagnostic(`no X11 display: get_hotkey answered ${JSON.stringify(info)}`);
-    assert.match(info.error ?? '', /could not be registered/, 'with no X11 display the app should say the chord is not registered');
+    assert.match(info.error ?? '', /could not be registered/, 'with no X11 display the app says the chord is not registered');
+    assert.equal(info.registered, false);
+    assert.equal(info.backend, 'none');
+  }
+  // Without a portal on the private bus the app must not sit waiting for one.
+  if (env.displayKind === 'mutter') {
+    await waitUntil(async () => (await app.invoke('get_hotkey')).phase === 'unavailable', { what: 'the portal probe to give up' });
+    assert.match(app.appLog(), /hotkey: Wayland session: asking the GlobalShortcuts portal/);
+    assert.match(app.appLog(), /hotkey: the portal could not be used \(.*falling back to the X11 grab/);
+  } else {
+    assert.equal(info.phase, 'not-applicable');
   }
 }));
 

@@ -43,7 +43,10 @@ pdf-extract = "0.12"
 # org.gnome.Shell.Screenshot API ("ScreenshotArea is not allowed"), so the
 # portal is the only working path — and it is the portable one anyway.
 [target.'cfg(target_os = "linux")'.dependencies]
-ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "remote_desktop", "screencast"] }
+ashpd = { version = "0.13", default-features = false, features = ["tokio", "screenshot", "remote_desktop", "screencast", "global_shortcuts"] }
+# Reading the portal's signal streams (Activated, ShortcutsChanged). Already in
+# the tree through ashpd; this only names it.
+futures-util = { version = "0.3", default-features = false }
 url = "2"
 tokio = { version = "1", features = ["time", "rt-multi-thread", "macros"] }
 # Paste-back on X11 (and into Xwayland apps): XTest key events plus the input

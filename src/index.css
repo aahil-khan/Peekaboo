@@ -2034,6 +2034,13 @@ html[data-window='peek'] {
   cursor: default;
 }
 
+/* The desktop owns the binding: shown like the recorder, but it is not one. */
+.peek-hotkey-managed {
+  display: inline-block;
+  cursor: default;
+  text-align: center;
+}
+
 /* Segmented control (theme mode, retention). */
 .peek-segmented {
   display: inline-flex;
