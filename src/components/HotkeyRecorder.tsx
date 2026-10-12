@@ -7,9 +7,16 @@ import { chordFromKeyboardEvent, formatHotkey, hotkeyParts } from '../lib/hotkey
  * to start recording, press a combination, and it is sent to Rust, which
  * re-registers it with the OS and reports back. The old chord keeps working
  * if the new one is refused, and the reason is shown underneath.
+ *
+ * When the desktop owns the binding (the GlobalShortcuts portal on Wayland)
+ * there is nothing to record: the row shows what the desktop bound, says so,
+ * and offers the desktop's own editor where the portal has one.
  */
 export const HotkeyRecorder: React.FC = () => {
-  const { hotkey, defaultHotkey, error: startupError, set, reset } = useHotkeyStore();
+  const {
+    hotkey, defaultHotkey, error: startupError, note, managedBySystem, triggerDescription, canConfigure, phase,
+    set, reset, configure,
+  } = useHotkeyStore();
   const [recording, setRecording] = useState(false);
   const [pendingMods, setPendingMods] = useState<string[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
@@ -59,11 +66,59 @@ export const HotkeyRecorder: React.FC = () => {
     return () => window.removeEventListener('blur', onBlur);
   }, [recording, stopRecording]);
 
+  if (managedBySystem) {
+    // The desktop's description is shown when it does not read as a chord
+    // Peekaboo can format (then `hotkey` is only the chord that was proposed).
+    const readable = triggerDescription !== null && formatHotkey(hotkey) !== hotkey ? formatHotkey(hotkey) : null;
+    const shown = readable ?? triggerDescription ?? formatHotkey(hotkey);
+    return (
+      <>
+        <div className="peek-settings-row">
+          <span className="peek-settings-rowtext">
+            <span className="peek-settings-label">Summon hotkey</span>
+            <span className="peek-settings-desc">
+              Works from any app. On this desktop the key is managed by the system.
+            </span>
+          </span>
+          <span className="peek-hotkey-controls">
+            {canConfigure && (
+              <button
+                type="button"
+                className="peek-btn peek-btn--sm"
+                disabled={busy}
+                onClick={async () => { setFailure(null); setBusy(true); setFailure(await configure()); setBusy(false); }}
+              >
+                Change…
+              </button>
+            )}
+            <span
+              className="peek-hotkey-recorder peek-hotkey-managed"
+              data-managed="true"
+              aria-label={`Summon hotkey is ${shown}, set by the system.`}
+            >
+              {shown}
+            </span>
+          </span>
+        </div>
+        <span className={failure ? 'peek-settings-desc peek-tone-error' : 'peek-settings-desc'} role="status">
+          {failure ?? (canConfigure
+            ? 'Change… opens your desktop’s shortcut editor; the new key shows up here.'
+            : 'Change it in your desktop’s keyboard settings; the new key shows up here.')}
+        </span>
+      </>
+    );
+  }
+
   const showing = recording
     ? pendingMods.length > 0
       ? `${hotkeyParts(pendingMods.join('+')).join(' + ')} + …`
       : 'Press a key combination'
     : formatHotkey(hotkey);
+
+  // Startup problems first, then what the portal said. A pending consent
+  // dialog is a hint, not a warning.
+  const status = failure ?? startupError ?? note;
+  const tone = failure || startupError ? 'peek-tone-error' : phase === 'requested' ? '' : 'peek-tone-warn';
 
   return (
     <>
@@ -105,9 +160,9 @@ export const HotkeyRecorder: React.FC = () => {
           </button>
         </span>
       </div>
-      {(failure || startupError) && (
-        <span className={failure ? 'peek-settings-desc peek-tone-error' : 'peek-settings-desc peek-tone-warn'} role="status">
-          {failure ?? startupError}
+      {status && (
+        <span className={`peek-settings-desc ${tone}`.trim()} role="status" data-hotkey-phase={phase}>
+          {status}
         </span>
       )}
     </>

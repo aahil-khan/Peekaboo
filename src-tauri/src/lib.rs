@@ -108,6 +108,7 @@ pub fn run() {
             platform::commands::paste_result,
             hotkey::get_hotkey,
             hotkey::set_hotkey,
+            hotkey::configure_hotkey,
             plugins::discovery::discover_plugins,
             plugins::discovery::check_plugin_js,
             plugins::fs::plugin_read_file,
@@ -126,8 +127,9 @@ pub fn run() {
 
             // ── Register the summon hotkey ──
             // Native and independent of the frontend, so it works even while
-            // the webview is still loading.
-            app.manage(hotkey::register_at_startup(&app.handle()));
+            // the webview is still loading. On Wayland the GlobalShortcuts
+            // portal is asked in the background; see hotkey/mod.rs.
+            hotkey::register_at_startup(&app.handle());
             let show_item = MenuItem::with_id(app, "show", "Show Peekaboo", true, None::<&str>)?;
             let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;

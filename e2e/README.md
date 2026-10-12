@@ -27,7 +27,7 @@ exit, including on Ctrl-C or a crash.
 | --- | --- | --- |
 | Temp root | `mkdtemp` under the system temp dir, short name (`pk-e2e-XXXX`) | Unix socket paths are limited to 108 bytes; the Wayland and bus sockets live here. Deleted at the end unless `--keep` / `E2E_KEEP=1`. |
 | `XDG_RUNTIME_DIR` | `<root>/run`, mode 0700 | Where Wayland sockets are looked up. The user's compositor socket is in a different directory, so the app cannot find it even by accident. |
-| Session bus | `dbus-daemon --session` on `<root>/run/bus` | The single-instance plugin claims a bus name; on the user's bus a test instance would swallow their own launch. Notifications, the tray and portals also go nowhere, which is intended. |
+| Session bus | `dbus-daemon` on `<root>/run/bus`, with a config that has no service directories | The single-instance plugin claims a bus name; on the user's bus a test instance would swallow their own launch. Nothing can be D-Bus-activated on this bus (the stock session config would start the real xdg-desktop-portal on the app's first portal call), so notifications, the tray and portals go nowhere, which is intended, and a test can stand in for a portal. |
 | Display | **mutter** `--headless --virtual-monitor 1600x900` locally; **Xvfb** in CI (`E2E_DISPLAY=xvfb`) | Mutter headless is a real GNOME compositor on a virtual monitor with no seat, so the app runs Wayland-native exactly as on the user's desktop, with Xwayland for the X11-only global hotkey. CI runners have no GPU and no mutter, so there the app runs on GTK's X11 backend under Xvfb. |
 | Mock model server | `lib/mock-ollama.mjs` on `$PORT+1` | Deterministic answers, and it records every request so tests assert on what the app actually sent. `$PORT+3` is kept free as the "unreachable server". |
 | WebKitWebDriver | `/usr/bin/WebKitWebDriver` on `$PORT+2` | Ships with webkit2gtk. It launches the app itself and talks to its webview over the inspector protocol, so it carries the display and bus environment for the app. `tauri-driver` is only a proxy in front of it that renames capabilities, so it is not needed; the one thing it added is the `TAURI_WEBVIEW_AUTOMATION=true` variable, which `launch.sh` sets. |
@@ -71,7 +71,9 @@ test('asking a question sends the system prompt', withApp({ settings: seededSett
   sees is a genuine boot of a configured install. Omit it for a fresh
   profile, which shows the setup wizard.
 - `files` writes profile-relative files before the first launch, e.g.
-  `{ 'config/com.peekaboo.app/hotkey.json': '...' }`.
+  `{ 'config/com.peekaboo.app/hotkey.json': '...' }`. A file named `env`
+  (one `NAME=value` per line) is exported into the app's environment by
+  `launch.sh`; the portal hotkey tests use it for `PEEKABOO_HOTKEY_BACKEND`.
 - `app.use('settings' | 'setup' | 'peekaboo')` switches the session to that
   window. `app.invoke(command, args)` calls one of the app's Tauri commands
   from inside the webview, exactly as the frontend does.
@@ -107,6 +109,12 @@ compositor as input.
 - The app's default Ollama URL is `localhost:11434`. A fresh (unseeded)
   profile will talk to a real Ollama on this machine if one is running; seed
   the mock URL for anything that asserts on requests.
+- There is no xdg-desktop-portal on the private bus, and the GNOME backend
+  for GlobalShortcuts needs gnome-shell behind it, so the portal hotkey path
+  is tested against `lib/mock-portal.py`: a Python stand-in that owns
+  `org.freedesktop.portal.Desktop` on the private bus and plays the desktop
+  (grant, decline, hang, refuse), driven from the test over stdin. It needs
+  `python3-gi`. What a real desktop's dialog does is a hand test.
 - `E2E_TRACE=1` logs every WebDriver call with timing. `E2E_X11=0` runs the
   mutter display without Xwayland (a pure-Wayland session). `E2E_TEST_TIMEOUT`
   is per test, in ms.

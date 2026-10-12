@@ -89,7 +89,7 @@ On first run, a setup window walks you through picking a backend.
 
 | Key | Action |
 | --- | --- |
-| `Ctrl+Alt+Space` (macOS: `Option+Space`) | Summon or hide. Configurable in Settings → General |
+| `Ctrl+Alt+Space` (macOS: `Option+Space`) | Summon or hide. Configurable in Settings → General; on Wayland desktops with the GlobalShortcuts portal the desktop owns the binding (see below) |
 | `Enter` | Send |
 | `Shift+Enter` | Line break |
 | `/` | Context plugin commands |
@@ -108,7 +108,13 @@ On first run, a setup window walks you through picking a backend.
 
 The hotkey is saved in `hotkey.json` in the app's config directory (`~/.config/com.peekaboo.app/` on Linux), separately from the other settings, because it is registered before the UI loads. Delete the file to go back to the default.
 
-On Wayland, or anywhere else the hotkey does not fire, bind the `peekaboo-app` command to any key in your desktop's own keyboard settings instead: launching the binary while it is already running toggles the overlay.
+How the key is registered depends on the session, and the app logs which path it took (`hotkey: ...` lines on stderr):
+
+- **X11 sessions, Windows, macOS:** an OS-level grab. The recorder in Settings changes it.
+- **Wayland sessions:** the grab only reaches X11 apps under Xwayland, so Peekaboo also asks the desktop through the XDG **GlobalShortcuts portal**. It proposes the saved chord; the desktop decides the real binding. The first launch shows a system dialog asking to allow "Summon Peekaboo" (GNOME 48+, KDE Plasma, Hyprland implement the portal; Sway and most other wlroots compositors do not). Once allowed, the X11 grab is released, Settings shows the key the desktop actually bound, and **Change…** opens the desktop's own shortcut editor; the recorder does not apply because the system owns the key. Decline the dialog, or run a desktop without the portal, and the X11 grab stays, with Settings saying so.
+- **Still no key?** Bind the `peekaboo-app` command to any key in your desktop's own keyboard settings: launching the binary while it is already running toggles the overlay.
+
+For the portal to recognise a non-sandboxed app, a `com.peekaboo.app.desktop` entry must exist. Packaged installs ship one; a build run from the tree writes a hidden one to `~/.local/share/applications/` the first time it asks the portal.
 
 ---
 
@@ -174,7 +180,7 @@ Peekaboo is built and tested on **Fedora / GNOME / Wayland**. Some capabilities 
 
 | Capability | Status |
 | --- | --- |
-| Global shortcuts | Reliable on X11. **Not reliable on Wayland** (GNOME, KDE, Sway, Hyprland): the underlying `global-hotkey` crate only has an X11 backend, and an X11 key grab generally fires only while an XWayland window has focus. On Wayland, bind the `peekaboo-app` command in your desktop's keyboard settings (see Keyboard shortcuts) until the planned portal-based implementation lands. |
+| Global shortcuts | X11: an OS grab, reliable. Wayland: the XDG GlobalShortcuts portal where the desktop implements it (GNOME 48+, KDE Plasma, Hyprland), after a one-time system dialog; the desktop owns the binding and Settings shows it. Wayland without the portal (Sway and most wlroots compositors): only the X11 grab, which fires while an Xwayland app has focus; bind the `peekaboo-app` command in the desktop's keyboard settings instead (see Keyboard shortcuts). Windows and macOS: the OS grab. |
 | Selection capture at summon | Works: primary selection through arboard (Wayland data-control or X11/Xwayland), no external tools. Not implemented on Windows and macOS yet |
 | Paste a result back (Enter) | Works: XTest for X11 apps, RemoteDesktop portal for Wayland-native apps; falls back to "copied, press Ctrl+V" and says why. Windows (`SendInput`) and macOS (`CGEvent`) compile but are untested |
 | Screen region capture | Works via `xdg-desktop-portal`. GNOME's private screenshot API is denied to unwhitelisted callers on GNOME 50, so the portal is the only path — it prompts once, then remembers. |

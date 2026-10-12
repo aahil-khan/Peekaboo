@@ -36,6 +36,16 @@ export XDG_DATA_HOME="$profile/data"
 export XDG_CACHE_HOME="$profile/cache"
 export TAURI_WEBVIEW_AUTOMATION=true
 
+# A test can hand the app extra variables through the profile (the `files`
+# option of launchApp): one NAME=value per line in `<profile>/env`. The hotkey
+# tests use it to point the app at the harness's stand-in portal.
+if [ -f "$profile/env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$profile/env"
+  set +a
+fi
+
 # The harness reads these back to prove the app ran where it was told to.
 echo $$ > "$profile/app.pid"
 env | sort > "$profile/app.env"
